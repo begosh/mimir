@@ -37,7 +37,7 @@
 
 ### 1. Klona eller ladda ned paketet
 ```bash
-git clone https://github.com/your-username/mimir.git
+git clone https://github.com/begosh/mimir.git
 cd mimir
 ```
 
