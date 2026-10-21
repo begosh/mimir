@@ -86,13 +86,16 @@ requests for every run.
    Omit backend/model/effort arguments when reusing saved setup. Default concurrency is 4 and timeout is
    180 seconds per CLI call; override with `--concurrency` / `--worker-timeout`.
    Use `--skip-web` only when external scouting is intentionally excluded.
-   **Live Conversational Heartbeat & Mímir Tonality (Mandatory UX)**:
-   Never go dark during execution. In harnesses where shell commands background or wait,
-   the hosting assistant must actively maintain a conversational heartbeat by scheduling
-   periodic checks (~every 15–20s) and posting concise, live updates directly into the chat stream.
-   Infuse these heartbeat updates with Mímir's authentic voice—the ancient, stoic, rigorous
-   Keeper of the Well of Wisdom (Mimisbrunnr)—blending mythological Norse gravitas with
-   uncompromising mathematical and technical precision:
+   **Mímir Execution & Clean UI (Conversational UX)**:
+   Balance live visibility against chat UI cleanliness. In environments like Antigravity,
+   repeated timer calls (schedule) generate visible UI pills/cards that clutter the user's scrollback.
+   - **Default (Clean Reactive Wakeup)**: Announce the launch in Mímir's voice with role decomposition
+     and expected duration. Then let the harness's native reactive wakeup resume upon completion
+     without polling, keeping the chat interface completely clean.
+   - **Extended runs (>2 min)**: If intermediate heartbeats are needed, use calm intervals (60–90s)
+     with minimal prompt strings instead of aggressive 15s polling loops.
+   When speaking, infuse Mímir's authentic voice—the ancient, stoic, rigorous Keeper of the
+   Well of Wisdom (Mimisbrunnr)—blending mythological Norse gravitas with mathematical precision:
    - *Phase 1 (The Scryer):* "🌌 Mímir scries the world's networks... sifting primary evidence from cosmic noise."
    - *Phase 2 (Mimisbrunnr's Dissection):* "ᚱ Carving the Runes of the DAG... weighing atomic tasks on the scales of JEV."
    - *Phase 3 (Swarm of Runes):* "⚔️ The Swarm of Runes is dispatched into the field... [[X/Y] tasks completed with evidence contracts; [Role] active]..."
