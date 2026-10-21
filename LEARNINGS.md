@@ -184,3 +184,48 @@ This executive synthesis unifies the quantitative, microstructure, exit strategy
   * # Adversarial Vulnerability Audit: Top 5 Catastrophic Failure Modes in `tradebot`
 
 An adversarial review of `tradebot` across ingestion, regime detect
+
+### [2026-10-21 19:10] Mål: OBJECTIVE:
+Design an optimal opening volatility and spread filter for Nasdaq Stockholm (OMXS) equities to prevent false breakout entries and severe slippage traps during the 09:00–09:15 CET opening window.
+
+Key Aspects to Resolve:
+1. Microstructure behavior during the 09:00 CET uncrossing auction on Nasdaq Nordic (widened spreads, order book replenishment delay).
+2. Indicator dynamics: Why standard ATR / breakout channels fail in the first 15 minutes.
+3. Concrete algorithmic filter: Specific mathematical criteria (e.g., relative spread ratio, 15m volume bucket thresholds, Opening Range Breakout delay) to qualify safe entries.
+4. Red-Team failure modes: How could this filter lead to missed high-momentum runners or trap capital?
+
+- **Huvudinsikt / Pareto-härdad lösning:** # Institutional Specification: Hardened Nasdaq Stockholm (OMXS) Opening Microstructure Filter (09:00–09:15 CET)
+
+## 1. Core Microstructure Rationale & Failure Mechanisms
+
+### 1.1 INET Nordic 09:00:00 CET Uncrossing Auction Dynamics
+* **Deterministic Randomized Uncrossing:** Between 09:00:00 and 09:0...
+- **Reflektionsnotis:** The initial architecture suffered from three fatal microstructure flaws: (1) Symmetric liquidity assumptions penalized true catalyst/momentum breakouts, where extreme one-sided order flow inherently blows out ask depth and blows past static RSR thres...
+- **Identifierade fallgropar:**
+  * ### Adversarial Red-Team Evaluation: OMXS Opening Volatility & Liquidity Filter
+
+This analysis exposes the structural failure modes, edge cases, and m
+
+### [2026-10-21 19:23] Mål: OBJECTIVE:
+Determine the most empirically and biomechanically effective training program for achieving a first strict pull-up (and progressing to consecutive sets of 5-10 strict repetitions) from zero baseline.
+
+Key Aspects to Resolve:
+1. Biomechanical requisites: Latissimus dorsi activation, scapular depression/retraction strength, rotator cuff stability, and grip/forearm capacity.
+2. Progression hierarchy: Rigorously evaluate band-assisted pull-ups vs negative (eccentric) pull-ups vs inverted rows vs flexed-arm isometric holds. Analyze why resistance bands often encourage faulty strength curves and poor bottom-range motor recruitment.
+3. Neuromuscular programming: Evaluate optimal weekly frequency (e.g., submaximal Grease the Groove vs structured 3x/week progressive overload), volume distribution, and fatigue management.
+4. Red-Team failure modes: Identify root causes of beginner plateaus and connective tissue injuries (distal biceps tendonitis, medial epicondylitis, shoulder impingement).
+5. Concrete phased program: Detailed multi-week progression with set/rep parameters and objective milestone exit criteria.
+
+- **Huvudinsikt / Pareto-härdad lösning:** # MASTER TRAINING MANUAL: ZERO TO 10 STRICT PULL-UPS
+**Empirical, Biomechanical, and Neuromuscular Progression Protocol**
+
+---
+
+## 1. Biomechanical Architecture & Kinetic Chain Activation
+
+A strict pronated pull-up is a closed kinetic chain (CKC) vertical pulling movement operating across three dist...
+- **Reflektionsnotis:** Adversarial reflection skipped due to worker timeout....
+- **Identifierade fallgropar:**
+  * ### 1. Etiology & Pathomechanics of Common Connective Tissue Injuries
+
+Beginner pull-up progressions frequently induce connective tissue failure becau
