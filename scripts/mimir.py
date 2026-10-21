@@ -62,7 +62,7 @@ ASCII_LOGO = r"""  __  __ _____ __  __ _____ _____
 
 
 class MimirConsole:
-    def __init__(self, is_en: bool = False, progress_format: str = "terminal"):
+    def __init__(self, is_en: bool = True, progress_format: str = "terminal"):
         self.console = Console(highlight=False) if HAS_RICH and progress_format == "terminal" else None
         self.is_en = is_en
         self.progress_format = progress_format
@@ -113,7 +113,7 @@ class MimirConsole:
             lbl_goal = "OBJECTIVE"
         else:
             title = "[bold gold1]M Í M I R // Vishetens Väktare & Autonom Svärm[/bold gold1]"
-            sub = '[italic dim]"Drick ur Mimers brunn. Sanningen är silad ur kosmos brus."[/italic dim]'
+            sub = '[italic dim]"Drink from the Well of Wisdom. Truth distilled from cosmic noise."[/italic dim]'
             mem_text = f"Minne: {entries} lärdomar"
             lbl_goal = "UPPDRAG"
 
@@ -127,16 +127,18 @@ class MimirConsole:
         else:
             print(f"=== M Í M I R ===\n{goal}\nBackend: {backend_name} ({model}) | {mem_text} | Phase: {phase_mode}\n", flush=True)
 
-    def print_phase(self, phase_num: int, title_sv: str, title_en: str):
-        title = title_en if self.is_en else title_sv
-        self.emit("phase_started", phase=phase_num, title=title)
+    def print_phase(self, phase_num: int, title: str, title_en: Optional[str] = None):
+        final_title = title_en or title
+        self.emit("phase_started", phase=phase_num, title=final_title)
         if self.progress_format == "jsonl":
             return
+        runes = {1: 'ᚠ', 2: 'ᚢ', 3: 'ᚦ', 4: 'ᚨ', 5: 'ᚱ'}
+        rune = runes.get(phase_num, 'ᛟ')
         if self.console:
-            self.console.print(f"\n[bold gold1]>> FAS {phase_num}: {title.upper()}[/bold gold1]")
+            self.console.print(f"\n[bold gold1]{rune} Phase {phase_num} // {final_title.upper()}[/bold gold1]")
             self._flush()
         else:
-            print(f"\n--- FAS {phase_num}: {title} ---", flush=True)
+            print(f"\n--- PHASE {phase_num}: {final_title} ---", flush=True)
 
     def display_intel(self, brief: IntelligenceBrief):
         self.emit("research_completed", source_count=len(brief.items), sources=[
@@ -151,9 +153,9 @@ class MimirConsole:
 
         title = "Mímir's Omni-Channel Scryer (Inhämtad Data)" if not self.is_en else "Mímir's Omni-Channel Scryer (Discovered Intelligence)"
         table = Table(title=f"[bold blue]{title}[/bold blue]", border_style="blue")
-        table.add_column("Kanal / Domän" if not self.is_en else "Channel / Domain", style="cyan", width=24)
-        table.add_column("Fynd / Titel" if not self.is_en else "Finding / Title", style="bold white", width=42)
-        table.add_column("Källa / Meta" if not self.is_en else "Source / Meta", style="green", width=20)
+        table.add_column("Channel / Domain", style="cyan", width=24)
+        table.add_column("Finding / Title", style="bold white", width=42)
+        table.add_column("Source / Meta", style="green", width=20)
 
         for it in brief.items[:6]:
             table.add_row(it.channel[:22], it.title[:40] + "...", it.author_or_meta[:18])
@@ -175,11 +177,11 @@ class MimirConsole:
                 print(f" - [{n.id}] {n.role}: {n.title} (JEV: {getattr(n, 'jev_score', 1.0):.2f})", flush=True)
             return
 
-        label = "Mímirs Run- och Uppgifts-DAG" if not self.is_en else "Mímir's Task & Rune DAG"
-        tree = Tree(f"[bold cyan]{label}[/bold cyan] ({len(graph.nodes)} {'deluppgifter' if not self.is_en else 'atomic tasks'})")
+        label = "Mímir's Task & Rune DAG"
+        tree = Tree(f"[bold cyan]{label}[/bold cyan] ({len(graph.nodes)} tasks)")
         tiers = graph.get_execution_tiers()
         for idx, tier in enumerate(tiers):
-            tier_lbl = f"Exekveringstier #{idx+1}" if not self.is_en else f"Execution Tier #{idx+1}"
+            tier_lbl = f"Execution Tier #{idx+1}"
             tier_branch = tree.add(f"[bold yellow]{tier_lbl}[/bold yellow] ({len(tier)} noder)")
             for node in tier:
                 deps_str = f" [dim](beror på: {', '.join(node.dependencies)})[/dim]" if node.dependencies else ""
@@ -232,20 +234,20 @@ async def _run_plan_stage(goal: str, output_path: str, model: str, backend: str,
     start_plan_time = time.time()
     intel_brief = IntelligenceBrief(topic=goal)
     if not skip_web:
-        ui.print_phase(1, "Mímirs Världsspaning (Dynamiska Källor & Primärdata)", "Mímir's World Scrying (Omni-Channel Discovery)")
-        ui.notice("scout_querying", "  [BUSY] Mímir scries the world's networks... sifting primary evidence from cosmic noise." if is_en else "  [BUSY] Mimer skådar genom världarnas nätverk... silar primärdata ur kosmos brus.")
+        ui.print_phase(1, "Mímir's World Scrying (Omni-Channel Discovery)")
+        ui.notice("scout_querying", "  [BUSY] Mímir scries the world's networks... sifting primary evidence from cosmic noise.")
         scout = ResearchScout()
         intel_brief = scout.conduct_deep_scout(goal, custom_domains=sources)
         ui.display_intel(intel_brief)
     else:
-        ui.print_phase(1, "Hoppar över extern spaning (--skip-web)", "Skipping external discovery (--skip-web)")
+        ui.print_phase(1, "Skipping external discovery (--skip-web)")
         ui.emit("research_skipped")
 
     intel_context = intel_brief.to_compact_markdown()
     memory_context = memory.load_memory_context(topic=goal)
 
-    ui.print_phase(2, "Mimisbrunns Dissektion (Rekursiv DAG & JEV-Beskärning)", "Dissection of Mimisbrunnr (Recursive DAG & JEV Pruning)")
-    ui.notice("dag_decomposing", "  [BUSY] Carving the Runes of the DAG & weighing branches on the scales of JEV..." if is_en else "  [BUSY] Ristar uppgifts-DAGens runor och väger grenarna på JEV-vågen...")
+    ui.print_phase(2, "Dissection of Mimisbrunnr (Recursive DAG & JEV Pruning)")
+    ui.notice("dag_decomposing", "  [BUSY] Carving the Runes of the DAG & weighing branches on the scales of JEV...")
     target_tasks = max_concurrency if max_concurrency >= 6 else None
     decomposer = RecursiveDecomposer(swarm=swarm, max_depth=max_depth, target_tasks=target_tasks)
     task_graph = await decomposer.decompose_goal(
@@ -259,7 +261,7 @@ async def _run_plan_stage(goal: str, output_path: str, model: str, backend: str,
         min_jev = 0.20 if max_concurrency >= 8 else 0.30
         pruned_nodes = await task_graph.prune_with_jev(jev_gate=jev_gate, min_jev=min_jev)
         if pruned_nodes:
-            msg = f"Beskar bort {len(pruned_nodes)} noder med låg JEV: {', '.join(pruned_nodes)}" if not is_en else f"Pruned {len(pruned_nodes)} low-JEV branches: {', '.join(pruned_nodes)}"
+            msg = f"Pruned {len(pruned_nodes)} low-JEV branches: {', '.join(pruned_nodes)}"
             ui.notice("tasks_pruned", msg, node_ids=pruned_nodes, threshold=min_jev)
 
     ui.display_dag(task_graph)
@@ -301,16 +303,15 @@ async def _run_plan_stage(goal: str, output_path: str, model: str, backend: str,
 
     if ui.progress_format != "jsonl":
         task_summary = ", ".join([f"{n.id} ({n.role})" for n in task_graph.nodes.values()])
-        if is_en:
-            plan_msg = (
-                f"\n[OK] ᚱ Mímir Phase 1 (Plan) Complete: {len(task_graph.nodes)} tasks carved into DAG ({state['plan_duration_seconds']}s).\n"
-                f"Tasks: {task_summary}\n"
-            )
+        plan_msg = (
+            f"\n[OK] ᚱ Mímir Phase 1 (Plan) Complete: {len(task_graph.nodes)} tasks carved into DAG ({state['plan_duration_seconds']}s).\n"
+            f"Tasks: {task_summary}\n"
+        )
+        if ui.console:
+            ui.console.print(f"[bold green]{plan_msg}[/bold green]")
+            ui._flush()
         else:
-            plan_msg = (
-                f"\n[OK] ᚱ Mimers Fas 1 (Plan) klar: {len(task_graph.nodes)} runuppgifter ristade i DAGen ({state['plan_duration_seconds']}s).\n"
-                f"Uppgifter: {task_summary}\n"
-            )
+            print(plan_msg, flush=True)
         if ui.console:
             ui.console.print(f"[bold green]{plan_msg}[/bold green]")
             ui._flush()
@@ -343,7 +344,7 @@ async def _run_execute_stage(state: Dict[str, Any], state_file: Optional[str], b
     blackboard = Blackboard(session_id=str(int(time.time())))
     start_exec_time = time.time()
 
-    ui.print_phase(3, "Runornas Svärm (Parallell Exekvering & Evidensavtal)", "Swarm of Runes (Parallel Execution & Evidence Contracts)")
+    ui.print_phase(3, "Swarm of Runes (Parallel Execution & Evidence Contracts)")
 
     def on_task_finish(node: TaskNode, res: SwarmResult, contract: Optional[Any] = None):
         if res.status != "SUCCESS":
@@ -390,14 +391,9 @@ async def _run_execute_stage(state: Dict[str, Any], state_file: Optional[str], b
             task_count=len(completed_data), duration_seconds=exec_duration)
 
     if ui.progress_format != "jsonl":
-        if is_en:
-            exec_msg = (
-                f"\n[OK] ⚔️ Mímir Phase 2 (Swarm) Complete: {len(completed_data)}/{len(completed_data)} tasks executed with verified evidence contracts ({exec_duration}s).\n"
-            )
-        else:
-            exec_msg = (
-                f"\n[OK] ⚔️ Mimers Fas 2 (Svärm) klar: {len(completed_data)}/{len(completed_data)} deluppgifter exekverade med verifierade evidensavtal ({exec_duration}s).\n"
-            )
+        exec_msg = (
+            f"\n[OK] ⚔️ Mímir Phase 2 (Swarm) Complete: {len(completed_data)}/{len(completed_data)} tasks executed with verified evidence contracts ({exec_duration}s).\n"
+        )
         if ui.console:
             ui.console.print(f"[bold green]{exec_msg}[/bold green]")
             ui._flush()
@@ -432,7 +428,7 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
     backend_display = swarm.__class__.__name__.replace("SwarmBackend", "")
     memory = JarvisMemory()
 
-    ui.print_phase(4, "Mimers Råd & Red-Team Prövning (GEPA Pareto-Härdning)", "Mímir's Counsel & Red-Team Trial (GEPA Pareto-Hardening)")
+    ui.print_phase(4, "Adversarial Trial & Red-Team Critique (GEPA Optimization)")
 
     red_team_critiques = []
     draft_solutions = []
@@ -474,8 +470,8 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
         else:
             print(f"  [OK] {msg}", flush=True)
 
-    ui.print_phase(5, "Mimers Ord (Executive Syntes & Minneskonsolidering)", "The Word of Mímir (Executive Synthesis & Memory Consolidation)")
-    ui.notice("synthesis_started", "  [BUSY] Forging the final Pareto-hardened Word of Mímir into the chronicle..." if is_en else "  [BUSY] Smider Mimers slutgiltiga Pareto-härdade ord till den eviga krönikan...")
+    ui.print_phase(5, "The Word of Mímir (Executive Synthesis & Chronicle)")
+    ui.notice("synthesis_started", "  [BUSY] Forging the final Pareto-hardened Word of Mímir into the chronicle..." if is_en else "  [BUSY] Smider Mímir's slutgiltiga Pareto-härdade ord till den eviga krönikan...")
 
     hardened_str = json.dumps(hardened_solution, indent=2, ensure_ascii=False) if isinstance(hardened_solution, (dict, list)) else str(hardened_solution)
     reflection_str = json.dumps(reflection, indent=2, ensure_ascii=False) if isinstance(reflection, (dict, list)) else str(reflection)
@@ -509,18 +505,18 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
         )
         report_lines = [
             f"# M Í M I R // Solution Matrix: {goal}",
-            f"\n**Framtagen av:** Mímir Autonomous Swarm ({backend_display} / {active_model}) | **Tid:** {total_elapsed:.1f}s | **Deluppgifter:** {len(completed_data)}",
+            f"\n**Synthesized by:** Mímir Autonomous Swarm ({backend_display} / {active_model} / effort={active_effort})\n",
             "\n---\n",
             mimir_persona_intro,
             "## 1. Executive Summary & Pareto-Härdad Sanning",
             hardened_str,
             "\n---\n",
-            "## 2. Mimers Reflektion & Motståndaranalys (Red-Team)",
+            "## 2. Mímir's Reflection & Adversarial Critique (Red-Team)",
             f"**Reflektionsnoter:**\n{reflection_str}\n" if reflection_str else "",
             f"**Avvärjda fallgropar:**\n{combined_critique[:1500]}\n" if combined_critique else "",
             "\n---\n",
-            "## 3. Empirisk Omvärldsspaning (Omni-Channel Evidence)",
-            intel_context if intel_context else "Ingen omvärldsspaning genomförd.",
+            "## 3. Empirical Intelligence Discovery (Omni-Channel Evidence)",
+            intel_context if intel_context else "No external intelligence gathered.",
             "\n---\n",
             "## 4. Detaljerade Delresultat per Agent (med Evidence Contracts)",
         ]
@@ -568,11 +564,11 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
     json_path.write_text(json.dumps(json_payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
     if ui.console:
-        completed_title = "The Counsel of Mímir is complete!" if is_en else "Mimers råd är fullbordat!"
-        rep_saved = "📄 Report saved to:" if is_en else "📄 Rapport sparad till:"
-        json_saved = "📊 JSON structured data:" if is_en else "📊 JSON-strukturerad data:"
-        mem_saved = "🧠 Long-term memory updated:" if is_en else "🧠 Långtidsminne uppdaterat:"
-        tot_time = "⏱ Total time:" if is_en else "⏱ Total tid:"
+        completed_title = "The Counsel of Mímir is complete!"
+        rep_saved = "📄 Report saved to:"
+        json_saved = "📊 JSON structured data:"
+        mem_saved = "🧠 Long-term memory updated:"
+        tot_time = "⏱ Total time:"
         ui.console.print(Panel(
             f"[bold gold1]{completed_title}[/bold gold1]\n\n"
             f"{rep_saved} [cyan]{out_path.resolve()}[/cyan]\n"
@@ -582,7 +578,7 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
             border_style="gold1",
             title="[bold gold1]M Í M I R // WISDOM DELIVERED[/bold gold1]"
         ))
-        ui.console.print(f"\n[bold gold1]{'Mimers sammanfattning:' if not is_en else 'Summary from Mímir:'}[/bold gold1]\n")
+        ui.console.print(f"\n[bold gold1]Summary from Mímir:[/bold gold1]\n")
         ui.console.print(Markdown(hardened_str[:1500] + ("..." if len(hardened_str) > 1500 else "")))
         ui._flush()
     elif ui.progress_format == "terminal":
@@ -717,7 +713,7 @@ def main():
     parser.add_argument("--progress", choices=["terminal", "jsonl"], default="terminal",
                         help="Rich terminal display or flushed JSONL progress events for a hosting harness")
     parser.add_argument("--model", "-m", type=str, default=None, help="Modell för mikromodeller (standard: anpassas efter backend)")
-    parser.add_argument("--skip-web", action="store_true", help="Hoppa över extern omvärldsspaning")
+    parser.add_argument("--skip-web", action="store_true", help="Skip external web scouting")
     parser.add_argument("--depth", type=int, default=2, help="Maximalt rekursionsdjup för dekomposition")
     parser.add_argument("--sources", "-s", type=str, default=None, help="Kommaseparerad lista med specifika källor/domäner")
     parser.add_argument("--no-jev", action="store_true", help="Inaktivera JEV-optimering")

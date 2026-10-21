@@ -2,7 +2,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Bilingual: EN / SV](https://img.shields.io/badge/Bilingual-EN%20%2F%20SV-gold.svg)](#svenska)
 [![skills.sh](https://img.shields.io/badge/skills.sh-compliant-purple.svg)](https://skills.sh)
 
 > *Drink from the Well. Truth distilled from the noise of the cosmos.*
@@ -19,7 +18,7 @@ API-key setup; it still consumes your account allowance or provider charges.
 
 [Skill usage](#use-mímir-as-a-skill) · [Supported harnesses](#supported-cli-harnesses) ·
 [Python usage](#run-the-python-engine-directly) · [Architecture](#how-the-swarm-works) ·
-[Svenska](#svenska)
+
 
 ## Use Mímir as a skill
 
@@ -301,47 +300,3 @@ Implementation: [orchestrator](scripts/mimir.py), [worker adapters](scripts/back
 [GEPA reflection](scripts/gepa_optimizer.py), [learning](scripts/jarvis_memory.py).
 The [porting specification](prompts/MIMIR_PORTING_PROMPT.md) describes the design
 to preserve when adding another adapter.
-
-## Svenska
-
-> *Drick ur Mimers brunn. Sanningen är silad ur kosmos brus.*
-
-**Mímir är en skill för forskning, arkitekturgranskning och komplex
-problemlösning**, med en Python-motor som kör svärmen. Installera med
-`npx skills add begosh/mimir --skill mimir` och be din kodassistent:
-
-```text
-Använd Mímir för att granska vår arkitektur för bakgrundsjobb.
-Jämför återförsök och idempotens, och utmana antagandena.
-```
-
-Vid första användningen föreslår Mímir CLI-inloggning eller API och frågar vilken
-modell och ansträngningsnivå svärmens arbetare ska använda. Värdens modell och
-arbetarnas inställningar visas separat. Exempel: Codex med `gpt-6.1-sol high`
-kan föreslå `gpt-6.1-sol low` för svärmen. Valet sparas i projektets
-`.mimir/config.json`, utan nycklar eller konversationshistorik, och återanvänds.
-
-Implementerade CLI-adaptrar är **AGY, Codex, Claude Code och OpenCode**.
-Samtalen ovan är illustrativa exempel; valideringsstatus och begränsningar finns
-i tabellen och [kompatibilitetsguiden](prompts/HARNESS_EXECUTION.md). CLI-inloggning
-undviker separat API-nyckelhantering men förbrukar kontots tilldelning eller
-leverantörens debitering. OpenCode använder tillfällig lagring; `--no-replay`
-styr visning av historik och gör inte en session flyktig.
-
-Samma motor kan köras direkt från Python:
-
-```bash
-python -m pip install -r requirements.txt
-python scripts/mimir.py --configure --backend agy --model gemini-3.8-flash-low --effort low
-python scripts/mimir.py --check
-python scripts/mimir.py "Granska vår strategi för återförsök och idempotens"
-```
-
-Motorn hanterar forskning, DAG/JEV, parallella arbetare och Blackboard,
-motståndargranskning/GEPA och slutrapport med lärdomar. Skillen visar verkliga
-statushändelser och sammanfattningar från resultaten. Ett hashvärde styrker
-resultatets identitet; det garanterar inte att uppgifterna är sanna.
-
-## License
-
-[MIT](LICENSE). Fri att använda, anpassa och distribuera.

@@ -33,19 +33,18 @@ class JarvisMemory:
         if not self.memory_path.exists():
             self.memory_path.parent.mkdir(parents=True, exist_ok=True)
             initial_content = (
-                "# M Í M I R // Vishetens Minnesbank & Cumulative Learnings\n\n"
-                "Detta dokument är Mimers beständiga minnesbank vid Mimisbrunnr. Här ackumuleras "
-                "beprövade arkitekturmönster, undvikna fallgropar (Red-Team) och "
-                "kärnheuristiker över tid och mellan körningar.\n\n"
-                "## 1. Verifierade Kärnheuristiker\n"
-                "- **Evidence Contracts:** Förankra alltid påståenden med hashade rådata/testresultat för att stoppa hallucinationskaskader.\n"
-                "- **Kahn DAG Integritet:** Validera acyklisk struktur vid runtime för att garantera att dynamiska underuppgifter inte låser schemaläggaren.\n"
-                "- **Prompt-as-a-Variable:** Skicka aldrig rå kontextmättnad mellan modeller; använd versionshanterade Blackboard-deltan.\n"
-                "- **Käll-Agnostik:** Välj informationskanaler dynamiskt baserat på domän (GitHub/RFCs för kod, PubMed för medicin, SEC för finans).\n\n"
-                "## 2. Red-Team Fallgropar & Motåtgärder (Anti-Patterns)\n"
-                "- **Överkonfidensfällan:** Mikromodeller rapporterar ofta hög konfidens trots logiska fel. Förlita dig aldrig på självskattad konfidens utan oberoende verifiering.\n"
-                "- **Deadlock via ohanterade fel:** Om en nod kraschar måste dess beroenden kaskaderas till CANCELLED direkt.\n\n"
-                "## 3. Logg över Ackumulerade Lärdomar\n"
+                "# M Í M I R // Persistent Memory Bank & Cumulative Learnings\n\n"
+                "This document is Mímir's persistent memory bank at Mimisbrunnr. Proven architecture "
+                "patterns, avoided pitfalls (Red-Team), and core heuristics accumulate here over time.\n\n"
+                "## 1. Verified Core Heuristics\n"
+                "- **Evidence Contracts:** Always anchor claims with hashed raw data/test outcomes to halt hallucination cascades.\n"
+                "- **Kahn DAG Integrity:** Validate acyclic structure at runtime to guarantee dynamic sub-tasks do not deadlock the scheduler.\n"
+                "- **Prompt-as-a-Variable:** Never flood raw context between models; use versioned Blackboard deltas.\n"
+                "- **Source-Agnostic Scouting:** Select information channels dynamically based on domain (GitHub/RFCs for software, PubMed for biomedicine, SEC for finance).\n\n"
+                "## 2. Red-Team Pitfalls & Mitigations (Anti-Patterns)\n"
+                "- **Overconfidence Trap:** Micro-models often report high confidence despite logical flaws. Never trust self-assessed confidence without independent verification.\n"
+                "- **Deadlock via Unhandled Errors:** If an upstream node crashes, dependencies must cascade to CANCELLED immediately.\n\n"
+                "## 3. Log of Cumulative Learnings\n"
             )
             self.memory_path.write_text(initial_content, encoding="utf-8")
 
@@ -72,16 +71,16 @@ class JarvisMemory:
         """
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         entry_lines = [
-            f"\n### [{timestamp}] Mål: {goal}",
-            f"- **Huvudinsikt / Pareto-härdad lösning:** {hardened_solution_snippet[:300].strip()}...",
+            f"\n### [{timestamp}] Objective: {goal}",
+            f"- **Key Takeaway / Pareto-Hardened Solution:** {hardened_solution_snippet[:300].strip()}...",
         ]
 
         if reflection_notes:
             clean_reflection = reflection_notes.replace("\n", " ").strip()
-            entry_lines.append(f"- **Reflektionsnotis:** {clean_reflection[:250]}...")
+            entry_lines.append(f"- **Reflection Note:** {clean_reflection[:250]}...")
 
         if red_team_traps:
-            entry_lines.append("- **Identifierade fallgropar:**")
+            entry_lines.append("- **Identified Pitfalls:**")
             for trap in red_team_traps[:2]:
                 entry_lines.append(f"  * {trap[:150].strip()}")
 

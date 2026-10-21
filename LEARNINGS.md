@@ -1,23 +1,23 @@
-# M Í M I R // Vishetens Minnesbank & Cumulative Learnings
+# M Í M I R // Persistent Memory Bank & Cumulative Learnings
 
-Detta dokument är Mimers beständiga minnesbank vid Mimisbrunnr. Här ackumuleras beprövade arkitekturmönster, undvikna fallgropar (Red-Team) och kärnheuristiker över tid och mellan körningar.
+This document is Mímir's persistent memory bank at Mimisbrunnr. Proven architecture patterns, avoided pitfalls (Red-Team), and core heuristics accumulate here across runs.
 
-## 1. Verifierade Kärnheuristiker
-- **Evidence Contracts:** Förankra alltid påståenden med hashade rådata/testresultat (SHA256) för att stoppa hallucinationskaskader genom agentträdet.
-- **Kahn DAG Integritet:** Validera acyklisk struktur vid runtime med Kahn's algoritm för att garantera att dynamiska underuppgifter inte låser schemaläggaren.
-- **Prompt-as-a-Variable:** Skicka aldrig rå kontextmättnad mellan modeller; använd versionshanterade Blackboard-deltan.
-- **Käll-Agnostik:** Välj informationskanaler dynamiskt baserat på domän (GitHub/RFCs för kod, arXiv/PubMed för forskning, officiella specifikationer för protokoll).
-- **JEV Grenbeskärning:** Beskär tidigt bort deluppgifter med låg Joint Expected Value ($JEV < 0.30$) för att spara latens och beräkningskostnad.
-- **GEPA Pareto-Härdning:** Låt alltid en motståndaragent (Red-Team) formulera skarp kritik som sedan muterar och härdar slutlösningen längs Pareto-fronten.
+## 1. Verified Core Heuristics
+- **Evidence Contracts:** Always anchor claims with hashed raw data/test outcomes (SHA256) to halt hallucination cascades across the agent tree.
+- **Kahn DAG Integrity:** Validate acyclic structure at runtime using Kahn's algorithm to guarantee dynamic subtasks never deadlock the scheduler.
+- **Prompt-as-a-Variable:** Never flood raw context between models; use versioned Blackboard deltas.
+- **Source-Agnostic Scouting:** Select information channels dynamically based on domain (GitHub/RFCs for code, arXiv/PubMed for scientific research, official specs for protocols).
+- **JEV Branch Pruning:** Prune branches early with low Joint Expected Value ($JEV < 0.30$) to conserve latency and compute.
+- **GEPA Pareto-Hardening:** Always deploy an adversarial agent (Red-Team) to articulate rigorous critique, mutating and hardening the final solution along the Pareto frontier.
 
-## 2. Red-Team Fallgropar & Motåtgärder (Anti-Patterns)
-- **Överkonfidensfällan:** Små modeller rapporterar ofta hög konfidens trots logiska fel. Förlita dig aldrig på självskattad konfidens utan oberoende kontraktverifiering.
-- **Deadlock via ohanterade fel:** Om en nod kraschar måste dess underordnade beroenden omedelbart kaskaderas till `CANCELLED` för att förhindra trådlåsning.
-- **Kontext-Mättnad (Context Pollution):** Skicka inte hela föregående konversationshistorik till mikromodeller. Isolera exekveringen till strikt typade input-variabler.
-- **TTL-Drift & Race Conditions:** Vid asynkron distribuerad exekvering måste lås och leasing förnyas aktivt för att förhindra split-brain.
+## 2. Red-Team Pitfalls & Mitigations (Anti-Patterns)
+- **Overconfidence Trap:** Micro-models often report high confidence despite logical flaws. Never trust self-assessed confidence without independent contract verification.
+- **Deadlock via Unhandled Errors:** If an upstream node crashes, dependent subtasks must cascade to `CANCELLED` immediately to prevent thread locking.
+- **Context Pollution:** Never pipe entire conversation histories to micro-workers. Isolate execution to strictly typed input variables.
+- **TTL Drift & Race Conditions:** In asynchronous distributed execution, locks and leases must be renewed actively to prevent split-brain.
 
-## 3. Logg över Ackumulerade Lärdomar
-*(Mímir lägger automatiskt till nya härdade lärdomar här efter varje genomfört uppdrag)*
+## 3. Log of Cumulative Learnings
+*(Mímir automatically appends new hardened learnings here after each completed run)*
 
 ---
 ### [Exempel] Mål: Robust distribuerad rate limiting med Redis och Token Bucket

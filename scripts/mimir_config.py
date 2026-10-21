@@ -21,25 +21,8 @@ DEFAULT_MODELS = {"agy": "gemini-3.8-flash-low", "claude": "haiku",
 
 
 def is_english_text(text: str) -> bool:
-    """Detects whether prompt is primarily in English."""
-    if not text:
-        return True
-    common_en = {
-        "how", "what", "why", "best", "the", "and", "for", "with", "system",
-        "architecture", "build", "design", "review", "inspect", "challenge",
-        "keep", "suitable", "small", "team", "compare", "retry", "idempotency",
-        "is", "are", "can", "should", "from", "this", "that", "in", "to",
-        "objective", "failure", "modes", "strategies", "database"
-    }
-    common_sv = {
-        "hur", "vad", "varför", "bästa", "och", "för", "med", "att", "bygga",
-        "skapa", "lösa", "granska", "undersök", "jämför", "är", "kan", "skall",
-        "skulle", "denna", "detta", "i", "till", "mål", "deluppgift"
-    }
-    words = set(re.findall(r"\b\w+\b", text.lower()))
-    en_score = len(words & common_en)
-    sv_score = len(words & common_sv)
-    return en_score >= sv_score
+    """English is the universal standard across all Mímir pipelines."""
+    return True
 
 
 class ConfigurationRequired(ValueError):

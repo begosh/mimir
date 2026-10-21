@@ -243,7 +243,7 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
             ui_term = mimir.MimirConsole(progress_format="terminal")
             ui_term.print_phase(2, "Dissektion", "Decomposition")
         self.assertGreaterEqual(term_stream.flush_count, 1)
-        self.assertIn("FAS 2", term_stream.getvalue())
+        self.assertIn("Phase 2", term_stream.getvalue())
 
     def test_research_and_terminal_modes_report_actual_state(self):
         brief = IntelligenceBrief(topic="fixture")
@@ -259,7 +259,7 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
         with patch.object(mimir, "HAS_RICH", False), redirect_stdout(stream):
             ui = mimir.MimirConsole()
             ui.print_phase(1, "Spaning", "Scouting")
-        self.assertIn("FAS 1", stream.getvalue())
+        self.assertIn("PHASE 1", stream.getvalue())
         self.assertNotIn('"schema_version"', stream.getvalue())
 
     def test_cli_progress_failure_is_machine_readable(self):

@@ -27,7 +27,7 @@ def main():
     parser.add_argument("--concurrency", type=int, default=4, help="Maximum concurrent workers")
     parser.add_argument("--progress", choices=["terminal", "jsonl"], default="terminal", help="Progress display format")
     parser.add_argument("--model", "-m", type=str, default=None, help="Modell för mikromodeller.")
-    parser.add_argument("--skip-web", action="store_true", help="Hoppa över omvärldsspaning.")
+    parser.add_argument("--skip-web", action="store_true", help="Skip external web scouting")
     parser.add_argument("--depth", type=int, default=2, help="Max rekursionsdjup.")
     parser.add_argument("--sources", "-s", type=str, default=None, help="Kommaseparerad lista med specifika källdomäner.")
     parser.add_argument("--no-jev", action="store_true", help="Inaktivera JEV-optimering.")

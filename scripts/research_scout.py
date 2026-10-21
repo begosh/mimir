@@ -72,10 +72,10 @@ class IntelligenceBrief:
 
     def to_compact_markdown(self) -> str:
         is_en = is_english_text(self.topic)
-        header = f"### Dynamic Intelligence Discovery: {self.topic}\n" if is_en else f"### Dynamisk Omvärldsspaning: {self.topic}\n"
+        header = f"### Dynamic Intelligence Discovery: {self.topic}\n"
         lines = [header]
         if not self.items:
-            lines.append("_Ingen extern data inhämtad._\n")
+            lines.append("_No external data gathered._\n")
             return "\n".join(lines)
 
         by_channel: Dict[str, List[ResearchItem]] = {}
@@ -131,13 +131,13 @@ class ResearchScout:
         # 1. Code / Architecture / Technical
         if any(w in t_lower for w in ["kod", "code", "arkitektur", "api", "protokoll", "system", "caching", "databas", "microservice"]):
             directives.append(SourceDirective(
-                channel_name=("Source Code & Reference Architecture" if is_en else "Källkod & Referensarkitektur"),
+                channel_name="Source Code & Reference Architecture",
                 search_query=f"{topic} architecture implementation",
                 target_site="github.com",
                 engine="web",
             ))
             directives.append(SourceDirective(
-                channel_name=("Engineering Debate & Post-Mortems" if is_en else "Ingenjörsdebatt & Post-Mortems"),
+                channel_name="Engineering Debate & Post-Mortems",
                 search_query=f"{topic} in production",
                 target_site="news.ycombinator.com",
                 engine="web",
@@ -146,7 +146,7 @@ class ResearchScout:
         # 2. Science / Research / Mathematics
         if any(w in t_lower for w in ["forskning", "paper", "arxiv", "teori", "matematik", "algoritm", "modell", "ai", "llm", "rlm"]):
             directives.append(SourceDirective(
-                channel_name=("Academic Preprints (arXiv)" if is_en else "Akademiska Preprints"),
+                channel_name="Academic Preprints (arXiv)",
                 search_query=topic,
                 engine="arxiv",
             ))
@@ -154,14 +154,14 @@ class ResearchScout:
         # 3. Community / Real-world Field Experience
         if any(w in t_lower for w in ["erfarenhet", "problem", "bugg", "bästa sättet", "community", "hur gör man"]):
             directives.append(SourceDirective(
-                channel_name=("Community & Field Experience" if is_en else "Community & Fältstudier"),
+                channel_name="Community & Field Experience",
                 search_query=f"{topic} discussions best practices",
                 engine="web",
             ))
 
         # 4. Universal Open Web Deep Dive (always included for breadth)
         directives.append(SourceDirective(
-            channel_name=("Primary Specs & Documentation" if is_en else "Primärkällor & Teknisk Dokumentation"),
+            channel_name="Primary Specs & Documentation",
             search_query=f"{topic} documentation specification overview",
             engine="web",
         ))
@@ -181,21 +181,21 @@ class ResearchScout:
         Uses a micro-agent to formulate optimal source venues for any arbitrary domain.
         """
         prompt = f"""
-        Du är Mímir Epistemic Intelligence Planner.
-        MÅL: "{topic}"
+        You are Mímir Epistemic Intelligence Planner.
+        OBJECTIVE: "{topic}"
 
-        Var finns den yttersta expertisen, empiriska sanningen och de mest auktoritativa källorna
-        för just detta ämne? (T.ex. GitHub för mjukvara, PubMed/bioRxiv för medicin, SEC/Riksbanken för finans,
-        lagtexter för juridik, eller specialistbloggar).
+        Where does the foremost authoritative expertise, empirical truth, and definitive primary documentation
+        exist for this exact domain? (e.g. GitHub for software, PubMed/bioRxiv for biomedicine, SEC/central banks for finance,
+        formal RFCs/specs for protocols, or specialized engineering post-mortems).
 
-        Generera 3 distinkta sökdirektiv i ren JSON:
+        Generate 3 distinct search directives strictly in valid JSON:
         {{
             "directives": [
                 {{
-                    "channel_name": "T.ex. Källkod & Repos / Medicinska Studier / Officiell Spec / Community",
-                    "search_query": "Optimerad sökfras på engelska eller svenska",
-                    "target_site": "valfri specifik domän t.ex. github.com, news.ycombinator.com eller null",
-                    "engine": "web eller arxiv"
+                    "channel_name": "e.g. Source Code & Repos / Biomedical Studies / Official Specs / Engineering Debates",
+                    "search_query": "Optimized, keyword-dense search query in English",
+                    "target_site": "optional specific authoritative domain like github.com, news.ycombinator.com, or null",
+                    "engine": "web or arxiv"
                 }}
             ]
         }}

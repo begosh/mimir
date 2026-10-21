@@ -427,7 +427,7 @@ class AgySwarmBackend(BaseSwarmBackend):
                 f"Solve the task objectively, concisely, and rigorously. Answer directly without preamble. "
                 f"Do not launch Mimir or delegate this task. "
                 f"Do not execute shell commands or interactive tools; produce your structured response directly. "
-                f"Match the language of the prompt (respond in English if prompt is in English, in Swedish if in Swedish)."
+                f"Produce your structured response directly in English without preamble."
             )
 
             cmd = [

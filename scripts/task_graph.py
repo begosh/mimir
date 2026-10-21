@@ -315,81 +315,42 @@ class RecursiveDecomposer:
     async def decompose_goal(self, goal: str, intelligence_context: str = "", memory_context: str = "") -> TaskGraph:
         graph = TaskGraph(goal=goal)
 
-        is_en = is_english_text(goal)
-        task_count_en = f"{self.target_tasks} specialized, non-overlapping atomic tasks" if (self.target_tasks and self.target_tasks >= 6) else "4-6 atomic, non-overlapping tasks"
-        task_count_sv = f"{self.target_tasks} specialiserade, icke-överlappande atomära mikrouppgifter" if (self.target_tasks and self.target_tasks >= 6) else "4-6 brutalt konkreta, atomära mikrouppgifter"
-        if is_en:
-            decomp_prompt = f"""
-            You are Mímir Chief Architect. Your task is to decompose the following objective into
-            {task_count_en} that specialized micro-agents can solve in parallel.
+        task_count = f"{self.target_tasks} specialized, non-overlapping atomic tasks" if (self.target_tasks and self.target_tasks >= 6) else "4-6 atomic, non-overlapping tasks"
+        decomp_prompt = f"""
+        You are Mímir Chief Architect. Your task is to decompose the following objective into
+        {task_count} that specialized micro-agents can solve in parallel.
 
-            OBJECTIVE: "{goal}"
+        OBJECTIVE: "{goal}"
 
-            CUMULATIVE HEURISTICS & LEARNINGS (FROM MEMORY BANK):
-            {memory_context[:1000] if memory_context else "No prior memory context available."}
+        CUMULATIVE HEURISTICS & LEARNINGS (FROM MEMORY BANK):
+        {memory_context[:1000] if memory_context else "No prior memory context available."}
 
-            EXTERNAL RESEARCH & CONTEXT:
-            {intelligence_context[:1500] if intelligence_context else "No external research available."}
+        EXTERNAL RESEARCH & CONTEXT:
+        {intelligence_context[:1500] if intelligence_context else "No external research available."}
 
-            TASK REQUIREMENTS:
-            1. Each task must have a specific, non-overlapping responsibility.
-            2. Match the language of the objective: respond in English.
-            3. Include at least:
-               - An 'Intel-Scout' or 'Domain-Analyst' for core mechanisms.
-               - A 'Formal-Modeler' or 'Code-Architect' for concrete algorithms/rules.
-               - A 'Red-Team-Critic' to challenge assumptions and find failure modes.
-               - An 'Executive-Synthesizer' that aggregates results into a unified solution (depends on earlier tasks).
-            4. Specify explicit dependencies in 'dependencies' (e.g. ["t1", "t2"]).
+        TASK REQUIREMENTS:
+        1. Each task must have a specific, non-overlapping responsibility.
+        2. Respond directly in English.
+        3. Include at least:
+           - An 'Intel-Scout' or 'Domain-Analyst' for core mechanisms.
+           - A 'Formal-Modeler' or 'Code-Architect' for concrete algorithms/rules.
+           - A 'Red-Team-Critic' to challenge assumptions and find failure modes.
+           - An 'Executive-Synthesizer' that aggregates results into a unified solution (depends on earlier tasks).
+        4. Specify explicit dependencies in 'dependencies' (e.g. ["t1", "t2"]).
 
-            Respond strictly in valid JSON matching this schema:
-            {{
-                "tasks": [
-                    {{
-                        "id": "t1",
-                        "role": "Domain-Analyst",
-                        "title": "Short descriptive task title in English",
-                        "objective": "Concrete and detailed instruction for what the micro-agent should solve.",
-                        "dependencies": []
-                    }}
-                ]
-            }}
-            """
-        else:
-            decomp_prompt = f"""
-            Du är Mímir Chief Architect. Din uppgift är att bryta ned följande mål till
-            {task_count_sv} som små agenter kan reda ut parallellt.
-
-            MÅL: "{goal}"
-
-            ACKUMULERADE LÄRDOMAR & KÄRNHEURISTIKER (FRÅN MINNESBANKEN):
-            {memory_context[:1000] if memory_context else "Ingen tidigare minneskontext tillgänglig."}
-
-            OMVÄRLDSKUNSKAP & FORSKNING:
-            {intelligence_context[:1500] if intelligence_context else "Ingen extern research tillgänglig."}
-
-            KRAV PÅ UPPGIFTERNA:
-            1. Varje uppgift måste ha ett specifikt, icke-överlappande ansvar.
-            2. Svara på svenska.
-            3. Inkludera minst:
-               - En 'Intel-Scout' eller 'Domain-Analyst' för kärnmekanismer.
-               - En 'Formal-Modeler' eller 'Code-Architect' för konkreta algoritmer/regler.
-               - En 'Red-Team-Critic' för att hitta fel, antaganden och gränsfall.
-               - En 'Executive-Synthesizer' som aggregerar delresultaten till en slutprodukt (beror på de andra).
-            4. Ange explicita beroenden i 'dependencies' (t.ex. ["t1", "t2"]).
-
-            Svara i ren JSON enligt detta schema:
-            {{
-                "tasks": [
-                    {{
-                        "id": "t1",
-                        "role": "Domain-Analyst",
-                        "title": "Kort titel på uppgiften på svenska",
-                        "objective": "Konkret och detaljerad instruktion för vad mikro-agenten ska lösa.",
-                        "dependencies": []
-                    }}
-                ]
-            }}
-            """
+        Respond strictly in valid JSON matching this schema:
+        {{
+            "tasks": [
+                {{
+                    "id": "t1",
+                    "role": "Domain-Analyst",
+                    "title": "Short descriptive task title in English",
+                    "objective": "Concrete and detailed instruction for what the micro-agent should solve.",
+                    "dependencies": []
+                }}
+            ]
+        }}
+        """
 
         res = await self.swarm.spawn(
             prompt=decomp_prompt,
@@ -406,74 +367,42 @@ class RecursiveDecomposer:
             tasks_data = res.data
 
         if not tasks_data:
-            if is_en:
-                tasks_data = [
-                    {
-                        "id": "t1",
-                        "role": "Domain-Analyst",
-                        "title": "Core parameters and theoretical invariants",
-                        "objective": f"Identify the most critical parameters and assumptions for: '{goal}'.",
-                        "dependencies": [],
-                    },
-                    {
-                        "id": "t2",
-                        "role": "Formal-Modeler",
-                        "title": "Concrete algorithm and rule set",
-                        "objective": f"Formulate a computable model or algorithm for: '{goal}'.",
-                        "dependencies": ["t1"],
-                    },
-                    {
-                        "id": "t3",
-                        "role": "Red-Team-Critic",
-                        "title": "Adversarial review and edge case analysis",
-                        "objective": "Identify 3 serious vulnerabilities, assumption flaws, or failure modes in the solution.",
-                        "dependencies": ["t1", "t2"],
-                    },
-                    {
-                        "id": "t4",
-                        "role": "Executive-Synthesizer",
-                        "title": "Pareto-optimal comprehensive synthesis",
-                        "objective": "Combine analysis, algorithm, and mitigations into a hardened solution.",
-                        "dependencies": ["t1", "t2", "t3"],
-                    },
-                ]
-            else:
-                tasks_data = [
-                    {
-                        "id": "t1",
-                        "role": "Domain-Analyst",
-                        "title": "Kärnparametrar och teoretiska invarianser",
-                        "objective": f"Identifiera de mest kritiska parametrarna och antagandena för: '{goal}'.",
-                        "dependencies": [],
-                    },
-                    {
-                        "id": "t2",
-                        "role": "Formal-Modeler",
-                        "title": "Konkret algoritm och regeluppsättning",
-                        "objective": f"Formulera en beräkningsbar modell eller algoritm för: '{goal}'.",
-                        "dependencies": ["t1"],
-                    },
-                    {
-                        "id": "t3",
-                        "role": "Red-Team-Critic",
-                        "title": "Adversariell granskning och gränsfallsanalys",
-                        "objective": "Hitta 3 allvarliga svagheter, antagandefel eller svåra gränsfall i lösningen.",
-                        "dependencies": ["t1", "t2"],
-                    },
-                    {
-                        "id": "t4",
-                        "role": "Executive-Synthesizer",
-                        "title": "Pareto-optimal helhetssyntes",
-                        "objective": "Kombinera analys, algoritm och motåtgärder mot kritikerna till en fullständig lösning.",
-                        "dependencies": ["t1", "t2", "t3"],
-                    },
-                ]
+            tasks_data = [
+                {
+                    "id": "t1",
+                    "role": "Domain-Analyst",
+                    "title": "Core parameters and theoretical invariants",
+                    "objective": f"Identify the most critical parameters and assumptions for: '{goal}'.",
+                    "dependencies": [],
+                },
+                {
+                    "id": "t2",
+                    "role": "Formal-Modeler",
+                    "title": "Concrete algorithm and rule set",
+                    "objective": f"Formulate a computable model or algorithm for: '{goal}'.",
+                    "dependencies": ["t1"],
+                },
+                {
+                    "id": "t3",
+                    "role": "Red-Team-Critic",
+                    "title": "Adversarial review and edge case analysis",
+                    "objective": "Identify 3 serious vulnerabilities, assumption flaws, or failure modes in the solution.",
+                    "dependencies": ["t1", "t2"],
+                },
+                {
+                    "id": "t4",
+                    "role": "Executive-Synthesizer",
+                    "title": "Pareto-optimal comprehensive synthesis",
+                    "objective": "Combine analysis, algorithm, and mitigations into a hardened solution.",
+                    "dependencies": ["t1", "t2", "t3"],
+                },
+            ]
 
         for t in tasks_data:
             node = TaskNode(
                 id=t.get("id", f"t{len(graph.nodes)+1}"),
                 role=t.get("role", "Micro-Worker"),
-                title=t.get("title", "Task" if is_en else "Deluppgift"),
+                title=t.get("title", "Task"),
                 prompt=(f"MIMIR OBJECTIVE AND CONSTRAINTS:\n{goal}\n\n"
                         f"RESEARCH CONTEXT:\n{intelligence_context[:1500]}\n\n"
                         f"YOUR TASK:\n{t.get('objective', t.get('prompt', ''))}"),

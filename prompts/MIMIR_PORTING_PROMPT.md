@@ -1,7 +1,6 @@
 # M Í M I R // Porting & Re-Creation Meta-Prompt
 
-> **English:** Use this prompt in **Claude Code**, **OpenAI Codex CLI**, **Cursor**, **Aider**, or any AI coding agent to instruct the model to build or port an instance of Mímir to your environment.  
-> **Svenska:** Använd denna prompt i **Claude Code**, **OpenAI Codex**, **Cursor**, **Aider** eller valfri AI-utvecklare för att instruera modellen att bygga eller anpassa en egen instans av Mímir i en ny miljö.
+> Use this prompt in **Claude Code**, **OpenAI Codex CLI**, **Cursor**, **Aider**, or any AI coding agent to instruct the model to build or port an instance of Mímir to your environment.
 
 ---
 
