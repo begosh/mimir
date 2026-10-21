@@ -114,7 +114,9 @@ def config_status(host: Optional[str] = None, path: Optional[Path] = None,
     suggested_model = DEFAULT_MODELS.get(suggested)
     if suggested == host and suggested in ("codex", "opencode"):
         suggested_model = host_model
+    harness_mismatch = bool(saved and host and saved.get("backend") != host)
     return {"config_path": str(target), "configured": saved is not None,
+            "harness_mismatch": harness_mismatch,
             "settings": saved, "available_clis": available,
             "suggested_backend": suggested, "confirmation_required": saved is None,
             "suggested_model": suggested_model, "suggested_effort": "low" if suggested else None,

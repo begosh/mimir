@@ -21,14 +21,15 @@ session. Omit unknown host/model values rather than guessing. The saved profile 
 shared across installed skill copies. It contains backend, model, and effort;
 credentials remain in CLI login stores or environment variables.
 
-If no profile exists, ask an early setup question even when the host is obvious:
-"Your Codex harness uses gpt-6.1-sol at high effort. Should Mímir reuse your CLI
-login with gpt-6.1-sol at low effort for swarm workers and remember this for the
-project, or would you prefer another worker model or API backend?"
-Adapt the CLI name to the host. If unclear, present the available CLIs and the
-HTTP option. Resolve the worker model and effort before saving. An existing
-explicit choice in this conversation counts as the answer; do not ask twice.
-Do not start dependent work while that choice is pending.
+Whenever the user invokes Mímir conversationally (e.g. "använd Mímir för att..." or "use Mímir to research..."):
+1. **Identify Host Harness & Active Model**: Detect your active harness (`codex`, `claude`, `opencode`, or `agy`) and your session's active model (e.g., `o3-mini`, `gpt-4o`, `claude-3-7-sonnet`, `gemini-3.8-flash-low`).
+2. **Inspect Setup**: Run `python <skill-dir>/scripts/mimir.py --config-status --host <known-host> --host-model <known-model>`.
+3. **Proactive Model Consultation**: If no profile exists, or if `harness_mismatch` is true (e.g. saved as AGY but running in Codex), or if the user hasn't explicitly specified the swarm worker model in this conversation, **proactively ask the user before launching the swarm**:
+   - In Swedish:
+     > *"Jag ser att du kör **[Codex / Claude Code / OpenCode / AGY]** med modellen `[aktiv modell]`. Ska Mímir köra svärmagenterna med samma modell (på låg ansträngning / low effort), eller föredrar du en snabb och kostnadseffektiv modell som `[t.ex. gpt-4o-mini / haiku / gemini-3.8-flash-low]`?"*
+   - In English:
+     > *"I see you are running **[Codex / Claude Code / OpenCode / AGY]** with model `[active model]`. Should Mímir use this model at low reasoning effort for the swarm workers, or would you prefer a fast, economical model such as `[e.g. gpt-4o-mini / haiku / gemini-3.8-flash-low]`?"*
+4. An existing explicit choice in this conversation counts as the answer; do not ask twice. Do not start dependent work while that choice is pending. Save preferences with `--configure` if the user wants to remember it for this repository.
 
 After agreement, save with
 `python <skill-dir>/scripts/mimir.py --configure --backend <choice> --model <model> --effort <effort>`.
@@ -147,7 +148,16 @@ saved model or effort.
 
 Använd Python-svärmen för en Mímir-utredning: hitta motorn relativt den laddade
 skill-filen, skicka ett självständigt mål med alla begränsningar och välj en
-inloggad CLI-backend uttryckligen. Kontrollera modell, låg ansträngningsnivå och
+inloggad CLI-backend uttryckligen.
+
+**Värd- och Modellkonsultation (Obligatorisk konversations-UX):**
+När användaren anropar Mímir konversationellt (t.ex. *"använd Mímir för att..."*):
+1. Identifiera din egen värdmiljö (`agy`, `codex`, `claude`, `opencode`) och vilken modell du kör i din aktiva session.
+2. Kör `--config-status --host <miljö> --host-model <aktiv-modell>`.
+3. Om modellen inte redan specificerats av användaren, fråga alltid vänligt och tydligt före start:
+   *"Jag ser att du kör **[Codex/Claude/OpenCode/AGY]** med modellen `[aktiv modell]`. Ska Mímir köra svärmagenterna med samma modell (på låg ansträngning), eller föredrar du en snabb/kostnadseffektiv modell som `[t.ex. gpt-4o-mini / haiku / gemini-3.8-flash-low]`?"*
+4. Kör därefter med `--backend <miljö> --model <överenskommen-modell> --effort low`.
+
 Låt motorn hantera DAG, JEV, Blackboard och
 motståndargranskning. Håll en levande konversationspuls i chatten under körningen
 med Mimers autentiska, fornnordiska och matematiskt stränga röst (scrying, runor,
