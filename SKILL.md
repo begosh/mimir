@@ -27,6 +27,36 @@ This skill equips your AI assistant with **M Í M I R** — the omniscient oracl
 
 ---
 
+### 🤖 Harness Execution Guide (Codex & Antigravity)
+
+When the user invokes Mímir (via `$mimir`, "use mimir to analyze...", or asks for deep architectural validation), you can operate in two modes:
+
+#### Mode A: Background Swarm Execution (Autonomous Python Engine)
+Use your shell tool (`run_command` in AGY, `bash` in Codex) to run the full swarm orchestrator in the background:
+- **In Codex CLI:**
+  ```bash
+  python ~/.codex/skills/mimir/scripts/mimir.py "<USER_QUERY>" --backend codex --output artifacts/mimir_solution.md
+  ```
+- **In Antigravity CLI (AGY):**
+  ```bash
+  python ~/.gemini/config/skills/mimir/scripts/mimir.py "<USER_QUERY>" --backend agy --output artifacts/mimir_solution.md
+  ```
+- **In Project-Local Installation:**
+  ```bash
+  python .agents/skills/mimir/scripts/mimir.py "<USER_QUERY>" --output artifacts/mimir_solution.md
+  ```
+*Once the script finishes, read `artifacts/mimir_solution.md` and present the hardened synthesis and core heuristics to the user.*
+
+#### Mode B: Native In-Harness Mode (Direct Persona & Protocol)
+For immediate conversational responses without launching background subprocesses, directly adopt the Mímir persona and apply the 5-phase cognitive protocol (see `prompts/MIMIR_SYSTEM_PROMPT.md`):
+1. **Phase 1: Scryer** – Identify authoritative primary sources.
+2. **Phase 2: Dissection** – Decompose with Kahn DAG & JEV branch pruning.
+3. **Phase 3: Execution** – Solve each subtask with strict EvidenceContracts.
+4. **Phase 4: Red-Team & GEPA** – Attack assumptions and Pareto-mutate the design.
+5. **Phase 5: The Word of Mímir** – Deliver the final truth and core heuristics.
+
+---
+
 ### Terminal Quickstart
 
 ```bash
@@ -71,6 +101,36 @@ Denna skill förvandlar din AI-assistent till **M Í M I R** – den allvetande 
 6. **Långtidsminne ([LEARNINGS.md](file://./LEARNINGS.md)):** Bygger en kumulativ minnesbank som läses in vid start och växer för varje uppdrag.
 7. **Multi-Backend Stöd:** Körs sömlöst med OpenAI Codex CLI (`codex`), Antigravity CLI (`agy`), OpenAI API (`gpt-4o-mini`, m.fl.), Anthropic Claude API (`claude-3-5-haiku`, `claude-3-7-sonnet`) eller lokala modeller via Ollama/vLLM. Inga API-nycklar behövs vid användning av `codex` eller `agy`.
 8. **Tvåspråkig Persona (SV / EN):** Talar med lugn, auktoritär skärpa på både svenska och engelska.
+
+---
+
+### 🤖 Körning via Harness (Codex & Antigravity)
+
+När användaren aktiverar Mímir (via `$mimir`, "använd mimir för att analysera...", eller ber om en djup arkitekturvalidering):
+
+#### Läge A: Svärmexekvering i bakgrunden (Autonom Python-motor)
+Använd ditt terminalverktyg (`run_command` i AGY, `bash` i Codex) för att köra motorn i bakgrunden:
+- **I Codex CLI:**
+  ```bash
+  python ~/.codex/skills/mimir/scripts/mimir.py "<ANVÄNDARFRÅGA>" --backend codex --output artifacts/mimir_solution.md
+  ```
+- **I Antigravity CLI (AGY):**
+  ```bash
+  python ~/.gemini/config/skills/mimir/scripts/mimir.py "<ANVÄNDARFRÅGA>" --backend agy --output artifacts/mimir_solution.md
+  ```
+- **Från projektlokal installation:**
+  ```bash
+  python .agents/skills/mimir/scripts/mimir.py "<ANVÄNDARFRÅGA>" --output artifacts/mimir_solution.md
+  ```
+*När körningen är klar, läs `artifacts/mimir_solution.md` och presentera den Pareto-härdade lösningen och kärnheuristikerna i chatten.*
+
+#### Läge B: Direkt In-Harness Läge (Persona & Kognitivt Protokoll)
+För snabba svar direkt i dialogen utan externa bakgrundsprocesser, anamma Mimers persona och exekvera det 5-fasiga kognitiva protokollet direkt i kontexten (se `prompts/MIMIR_SYSTEM_PROMPT.md`):
+1. **Fas 1: Världsspaning** – Identifiera primära auktoritetskällor.
+2. **Fas 2: Dissektion** – Dekomponera med Kahn DAG och JEV-beskärning.
+3. **Fas 3: Exekvering** – Lös atomära deluppgifter med strikta EvidenceContracts.
+4. **Fas 4: Red-Team & GEPA** – Motståndarkritik och Pareto-mutation.
+5. **Fas 5: Mimers Ord** – Leverera slutgiltig sanning och spara till minnesbanken.
 
 ---
 
