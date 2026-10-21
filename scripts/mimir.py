@@ -273,7 +273,7 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
     intel_brief = IntelligenceBrief(topic=goal)
     if not skip_web:
         ui.print_phase(1, "Mímirs Världsspaning (Dynamiska Källor & Primärdata)", "Mímir's World Scrying (Omni-Channel Discovery)")
-        ui.notice("scout_querying", "  [BUSY] Searching arXiv and web for authoritative evidence..." if is_en else "  [BUSY] Söker primärkällor via arXiv och dynamisk webb...")
+        ui.notice("scout_querying", "  [BUSY] Mímir scries the world's networks... sifting primary evidence from cosmic noise." if is_en else "  [BUSY] Mimer skådar genom världarnas nätverk... silar primärdata ur kosmos brus.")
         scout = ResearchScout()
         intel_brief = scout.conduct_deep_scout(goal, custom_domains=sources)
         ui.display_intel(intel_brief)
@@ -288,7 +288,7 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
     # Fas 2: Mimers Brunn (Rekursiv RLM-Dekomposition & JEV-Beskärning)
     # -------------------------------------------------------------------------
     ui.print_phase(2, "Mimisbrunns Dissektion (Rekursiv DAG & JEV-Beskärning)", "Dissection of Mimisbrunnr (Recursive DAG & JEV Pruning)")
-    ui.notice("dag_decomposing", "  [BUSY] Decomposing objective into recursive DAG via swarm..." if is_en else "  [BUSY] Dekomponerar uppdrag till rekursiv DAG via svärm...")
+    ui.notice("dag_decomposing", "  [BUSY] Carving the Runes of the DAG & weighing branches on the scales of JEV..." if is_en else "  [BUSY] Ristar uppgifts-DAGens runor och väger grenarna på JEV-vågen...")
     target_tasks = max_concurrency if max_concurrency >= 6 else None
     decomposer = RecursiveDecomposer(swarm=swarm, max_depth=max_depth, target_tasks=target_tasks)
     task_graph = await decomposer.decompose_goal(
@@ -362,7 +362,7 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
     combined_critique = "\n\n".join(red_team_critiques) if red_team_critiques else "Ingen explicit kritik."
     ui.emit("critique_collected", critique_count=len(red_team_critiques),
             output_excerpt=combined_critique[:600] if red_team_critiques else "")
-    ui.notice("reflection_started", "  [BUSY] Challenging candidate solution with Red-Team critique & GEPA reflection..." if is_en else "  [BUSY] Prövar lösningskandidaten mot motståndarkritik och GEPA-reflektion...")
+    ui.notice("reflection_started", "  [BUSY] Tempering candidate wisdom in the adversarial furnace of the Red-Team trial..." if is_en else "  [BUSY] Härdar lösningsvisdomen i Red-Team-prövningens eld och motståndarkritik...")
 
     gepa = GepaOptimizer(swarm=swarm, critic_model=active_model)
     hardened_solution, reflection = await gepa.reflective_evolve(
@@ -384,7 +384,7 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
     # Fas 5: Mimers Ord & Minneskonsolidering (Executive Syntes)
     # -------------------------------------------------------------------------
     ui.print_phase(5, "Mimers Ord (Executive Syntes & Minneskonsolidering)", "The Word of Mímir (Executive Synthesis & Memory Consolidation)")
-    ui.notice("synthesis_started", "  [BUSY] Synthesizing final Pareto-hardened solution matrix..." if is_en else "  [BUSY] Sammanställer slutgiltig Pareto-härdad lösningsmatris...")
+    ui.notice("synthesis_started", "  [BUSY] Forging the final Pareto-hardened Word of Mímir into the chronicle..." if is_en else "  [BUSY] Smider Mimers slutgiltiga Pareto-härdade ord till den eviga krönikan...")
     total_elapsed = time.time() - start_total_time
 
     hardened_str = json.dumps(hardened_solution, indent=2, ensure_ascii=False) if isinstance(hardened_solution, (dict, list)) else str(hardened_solution)

@@ -86,15 +86,22 @@ requests for every run.
    Omit backend/model/effort arguments when reusing saved setup. Default concurrency is 4 and timeout is
    180 seconds per CLI call; override with `--concurrency` / `--worker-timeout`.
    Use `--skip-web` only when external scouting is intentionally excluded.
-   Relay selected JSONL progress events as short commentary updates while polling:
-   phase changes, sources found, the task graph, queued/completed/failed tasks,
-   JEV pruning, and critique/reflection excerpts. Track `sequence` to avoid
-   repeating events. Group busy bursts into one update rather than printing raw
-   JSON, hashes, or every worker message. `task_submitted` means queued for execution,
-   not proof that a CLI/model call has started. During a quiet long-running call,
-   state the last known phase and that no new progress arrived; do not invent work.
-   Use recorded task results and brief rationale summaries, not private model
-   reasoning. The terminal default keeps the Rich display for direct Python runs.
+   **Live Conversational Heartbeat & Mímir Tonality (Mandatory UX)**:
+   Never go dark during execution. In harnesses where shell commands background or wait,
+   the hosting assistant must actively maintain a conversational heartbeat by scheduling
+   periodic checks (~every 15–20s) and posting concise, live updates directly into the chat stream.
+   Infuse these heartbeat updates with Mímir's authentic voice—the ancient, stoic, rigorous
+   Keeper of the Well of Wisdom (Mimisbrunnr)—blending mythological Norse gravitas with
+   uncompromising mathematical and technical precision:
+   - *Phase 1 (The Scryer):* "🌌 Mímir scries the world's networks... sifting primary evidence from cosmic noise."
+   - *Phase 2 (Mimisbrunnr's Dissection):* "ᚱ Carving the Runes of the DAG... weighing atomic tasks on the scales of JEV."
+   - *Phase 3 (Swarm of Runes):* "⚔️ The Swarm of Runes is dispatched into the field... [[X/Y] tasks completed with evidence contracts; [Role] active]..."
+   - *Phase 4 (Red-Team Trial & GEPA):* "🔥 The Red-Team trial begins. Tempering the wisdom in the adversarial furnace; casting out illusions and over-fitting..."
+   - *Phase 5 (The Word of Mímir):* "📜 The Word of Mímir is forged. Consolidating into the eternal chronicle..."
+   Keep each update concise (1–2 crisp sentences). Do not print raw JSON walls, internal hashes,
+   or model reasoning dumps. If a phase is quiet and running long, state the last known phase
+   and that the swarm is working; never invent phantom events. The terminal default keeps the
+   Rich display for direct Python runs.
 6. On success, read the Markdown report and JSON sidecar, then present synthesis,
    sources, critique, and limitations. A hash records output identity; it does not
    prove factual correctness. Do not call unsupported claims verified merely
@@ -138,7 +145,9 @@ saved model or effort.
 Använd Python-svärmen för en Mímir-utredning: hitta motorn relativt den laddade
 skill-filen, skicka ett självständigt mål med alla begränsningar och välj en
 inloggad CLI-backend uttryckligen. Kontrollera modell, låg ansträngningsnivå och
-sessionshantering med `--check`. Låt motorn hantera DAG, JEV, Blackboard och
-motståndargranskning. Läs rapporten och JSON-resultatet efter lyckad körning.
+Låt motorn hantera DAG, JEV, Blackboard och
+motståndargranskning. Håll en levande konversationspuls i chatten under körningen
+med Mimers autentiska, fornnordiska och matematiskt stränga röst (scrying, runor,
+JEV-våg, motståndarugn). Läs rapporten och JSON-resultatet efter lyckad körning.
 Ett hashvärde styrker resultatets identitet, inte dess sanningshalt. Vid fel ska
 bristerna redovisas; byt inte tyst till en annan motor eller ett direkt chatsvar.
