@@ -108,16 +108,16 @@ class JevDecisionGate:
 
         prompt = f"""
         JEV EVALUATION:
-        ÖVERGRIPANDE MÅL: "{goal}"
-        DELUPPGIFT: "{task_title}"
-        INSTRUKTION: "{task_prompt[:500]}"
-        BEROR PÅ: {parent_dependencies}
+        OVERALL OBJECTIVE: "{goal}"
+        SUBTASK: "{task_title}"
+        INSTRUCTION: "{task_prompt[:500]}"
+        DEPENDENCIES: {parent_dependencies}
 
-        UPPGIFT:
-        Bedöm uppgiftens Joint Expected Value (JEV):
-        1. 'criticality': Hur avgörande är denna uppgift för målet? (0.0 = onödig/trivial, 1.0 = oumbärlig).
-        2. 'redundancy_penalty': Hur mycket överlappar den med standardkunskap eller andra noder? (0.0 = unik, 1.0 = helt redundant).
-        Svara i ren JSON enligt schemat.
+        TASK:
+        Assess the task's Joint Expected Value (JEV):
+        1. 'criticality': How critical is this task for the goal? (0.0 = trivial/redundant, 1.0 = indispensable).
+        2. 'redundancy_penalty': Overlap with general knowledge or other tasks? (0.0 = unique, 1.0 = completely redundant).
+        Respond strictly in valid JSON matching the schema.
         """
 
         res = await self.swarm.spawn(
@@ -156,18 +156,18 @@ class JevDecisionGate:
         prompt = f"""
         EVIDENCE CONTRACT SYSTEM 1 SCREENING:
         AGENT: {role}
-        BEVIS-HASH: sha256:{raw_evidence_hash[:12]}
-        LEVERERAT RESULTAT:
+        EVIDENCE HASH: sha256:{raw_evidence_hash[:12]}
+        DELIVERED RESULT:
         {payload_str}
 
-        FRÅGA:
-        Är detta resultat sakligt, logiskt sammanhängande och fritt från uppenbara hallucinationer?
-        Välj:
-        - "APPROVE": Resultatet är solitt och kan committas direkt till Blackboard.
-        - "AUDIT_REQUIRED": Osäkert eller gränsfall; kräver obligatorisk Red-Team-granskning.
-        - "REJECT": Uppenbart felaktigt, tomt eller havererat.
+        QUESTION:
+        Is this result factual, logically coherent, and free from obvious hallucinations?
+        Choose:
+        - "APPROVE": Result is solid and can be committed directly to Blackboard.
+        - "AUDIT_REQUIRED": Uncertain or borderline; requires mandatory Red-Team review.
+        - "REJECT": Obviously flawed, empty, or failed.
 
-        Svara i ren JSON enligt schemat.
+        Respond strictly in valid JSON matching the schema.
         """
 
         res = await self.swarm.spawn(

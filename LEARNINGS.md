@@ -51,3 +51,34 @@ Ett standard-Bloomfilter lagrar en bitvektor, inte själva elementen. Vid insät
   * Vanliga felpåståenden om Bloomfilter:
 
 - **”Ett positivt svar bevisar medlemskap.”** Nej. Det betyder att elementet *kan finnas*; falska positiva är m
+
+### [2026-10-21 17:42] Mål: Review and challenge our background-job architecture based on the artifacts in this repository (specifically artifacts/celery_idempotency.md: Celery + Redis Lua atomic scripts, watchdog heartbeat threads, fencing tokens, and TTL backoff).
+
+Objectives:
+1. Architecture Audit & Failure Modes:
+   - Challenge the Redis + Celery distributed lock architecture. Analyze failure modes including Redis failover/split-brain, watchdog thread death, Celery worker OOM/SIGKILL during execution, network partitions, and clock drift.
+   - Contrast memory-based distributed locking (Redis Lua) vs. database-level transactional idempotency (PostgreSQL transactional outbox, UNIQUE constraints, FOR UPDATE SKIP LOCKED).
+
+2. Retry & Idempotency Strategy Comparison:
+   - Compare retry policies: Exponential backoff with jitter, dead-letter exchanges/queues (DLQ), and handling of fatal non-retryable errors (poison pills).
+   - Compare idempotency patterns: State machines with optimistic locking vs. deduplication tables vs. distributed locking.
+
+3. Pragmatic Recommendation for a Small Team:
+   - Evaluate operational complexity vs. safety. Does a small team need custom Lua scripts and background watchdog threads in Redis, or does an RDBMS-backed pattern (Postgres SKIP LOCKED or robust task state machine) offer superior reliability with lower operational overhead?
+   - Deliver a hardened, actionable implementation guide and decision matrix suitable for a small engineering team.
+
+- **Huvudinsikt / Pareto-härdad lösning:** # Härdad Idempotens- & Bakgrundsjobbsarkitektur för PostgreSQL
+
+## 1. Datamodell & DDL med Write-Fence Guarantees
+
+```sql
+-- 1. Idempotens och Fencing Ledger
+CREATE TABLE idempotency_records (
+    scope VARCHAR(64) NOT NULL,
+    idempotency_key VARCHAR(255) NOT NULL,
+    status VARCHAR(32) NOT NULL...
+- **Reflektionsnotis:** Den föreslagna PostgreSQL-lösningen var sårbar på tre avgörande punkter: 1) Fencing-token inkrementerades vid jobb-uttag men saknade strikt 'fencing guard' (WHERE fencing_token = :expected) vid affärsmutationen i måltabellerna, vilket möjliggjorde 'z...
+- **Identifierade fallgropar:**
+  * # Red-Team-Kritik & Stresstest: Bakgrundsjobb, Lås & Idempotensarkitektur
+
+Granskning och angreppsvektorer mot föreslagna mönster i [`artifacts/celery

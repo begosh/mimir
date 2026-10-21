@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -17,6 +18,28 @@ HTTP_BACKENDS = ("openai", "anthropic", "ollama")
 BACKENDS = CLI_BACKENDS + HTTP_BACKENDS
 DEFAULT_MODELS = {"agy": "gemini-3.8-flash-low", "claude": "haiku",
                   "openai": "gpt-4o-mini", "anthropic": "claude-3-5-haiku-20241022"}
+
+
+def is_english_text(text: str) -> bool:
+    """Detects whether prompt is primarily in English."""
+    if not text:
+        return True
+    common_en = {
+        "how", "what", "why", "best", "the", "and", "for", "with", "system",
+        "architecture", "build", "design", "review", "inspect", "challenge",
+        "keep", "suitable", "small", "team", "compare", "retry", "idempotency",
+        "is", "are", "can", "should", "from", "this", "that", "in", "to",
+        "objective", "failure", "modes", "strategies", "database"
+    }
+    common_sv = {
+        "hur", "vad", "varför", "bästa", "och", "för", "med", "att", "bygga",
+        "skapa", "lösa", "granska", "undersök", "jämför", "är", "kan", "skall",
+        "skulle", "denna", "detta", "i", "till", "mål", "deluppgift"
+    }
+    words = set(re.findall(r"\b\w+\b", text.lower()))
+    en_score = len(words & common_en)
+    sv_score = len(words & common_sv)
+    return en_score >= sv_score
 
 
 class ConfigurationRequired(ValueError):
@@ -115,8 +138,6 @@ def resolve_execution(backend: Optional[str], model: Optional[str], effort: Opti
     chosen = {"antigravity": "agy", "claude-code": "claude", "openai-codex": "codex"}.get(chosen, chosen)
     if chosen not in BACKENDS:
         raise ConfigurationRequired("Unknown selected backend; run setup or pass a supported --backend.")
-    # Explicit override may retain model/effort only if it is the saved backend.
-    # Ignore malformed saved profiles when the user deliberately overrides them.
     if saved is None:
         try:
             saved = load_config(path)

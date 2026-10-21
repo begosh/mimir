@@ -10,6 +10,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from backend import BaseSwarmBackend, SwarmTask
+from mimir_config import is_english_text
 
 
 @dataclass
@@ -150,25 +151,49 @@ class GepaOptimizer:
         goal: str,
         critique_points: str,
     ) -> Tuple[str, str]:
-        prompt = f"""
-        Du är Mímir GEPA-Reflektionskritiker.
-        MÅL: "{goal}"
+        is_en = is_english_text(goal)
+        if is_en:
+            prompt = f"""
+            You are Mímir GEPA-Reflection Critic.
+            OBJECTIVE: "{goal}"
 
-        FÖRESLAGEN LÖSNING / ALGORITM:
-        {candidate_content}
+            PROPOSED SOLUTION / ARCHITECTURE:
+            {candidate_content}
 
-        IDENTIFIERADE SVAGHETER & MOTSTÅNDARKRITIK (RED-TEAM):
-        {critique_points}
+            IDENTIFIED WEAKNESSES & ADVERSARIAL CRITIQUE (RED-TEAM):
+            {critique_points}
 
-        UPPGIFT:
-        1. Analysera varför lösningen är sårbar för kritiken.
-        2. Genomför en evolutionär MUTATION som täpper till luckorna och härdar lösningen
-           utan att öka komplexiteten onödigt mycket (Pareto-effektivitet).
+            TASK:
+            1. Analyze why the solution is vulnerable to the critique.
+            2. Perform an evolutionary MUTATION that seals vulnerabilities and hardens the solution
+               without needlessly inflating complexity (Pareto efficiency).
+            3. Match the language of the objective: respond in English.
 
-        Svara i ren JSON med nycklarna:
-        - "reflection": Kort analys av svagheterna och vad som åtgärdats.
-        - "hardened_solution": Den fullständiga, förbättrade lösningen.
-        """
+            Respond strictly in valid JSON with keys:
+            - "reflection": Concise analysis of weaknesses and what was mitigated.
+            - "hardened_solution": The complete, hardened solution.
+            """
+        else:
+            prompt = f"""
+            Du är Mímir GEPA-Reflektionskritiker.
+            MÅL: "{goal}"
+
+            FÖRESLAGEN LÖSNING / ALGORITM:
+            {candidate_content}
+
+            IDENTIFIERADE SVAGHETER & MOTSTÅNDARKRITIK (RED-TEAM):
+            {critique_points}
+
+            UPPGIFT:
+            1. Analysera varför lösningen är sårbar för kritiken.
+            2. Genomför en evolutionär MUTATION som täpper till luckorna och härdar lösningen
+               utan att öka komplexiteten onödigt mycket (Pareto-effektivitet).
+            3. Svara på svenska.
+
+            Svara i ren JSON med nycklarna:
+            - "reflection": Kort analys av svagheterna och vad som åtgärdats.
+            - "hardened_solution": Den fullständiga, förbättrade lösningen.
+            """
 
         res = await self.swarm.spawn(
             prompt=prompt,
@@ -182,7 +207,7 @@ class GepaOptimizer:
         if isinstance(res.data, dict) and "hardened_solution" in res.data:
             return res.data["hardened_solution"], res.data.get("reflection", "")
 
-        return candidate_content, "Ingen strukturerad mutation kunde utföras."
+        return candidate_content, ("No structured mutation could be performed." if is_en else "Ingen strukturerad mutation kunde utföras.")
 
     def _compute_pareto_front(self, candidates: List[CandidateProgram]) -> List[CandidateProgram]:
         front = []

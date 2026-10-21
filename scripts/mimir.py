@@ -33,7 +33,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from backend import BaseSwarmBackend, SwarmResult, SwarmTask, create_swarm_backend
-from mimir_config import ConfigurationRequired, configure, config_status, resolve_execution
+from mimir_config import is_english_text, ConfigurationRequired, configure, config_status, resolve_execution
 from gepa_optimizer import GepaOptimizer
 from jarvis_memory import JarvisMemory
 from jev_gate import JevDecisionGate
@@ -362,28 +362,47 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
             "Min svärm har vandrat genom världarnas nätverk, vägt sannolikheterna och härdat denna lösning i prövningens eld.\"*\n\n"
         )
 
-    report_lines = [
-        f"# M Í M I R // Solution Matrix: {goal}",
-        f"\n**Framtagen av:** Mímir Autonomous Swarm ({backend_display} / {active_model}) | **Tid:** {total_elapsed:.1f}s | **Deluppgifter:** {len(completed_data)}",
-        "\n---\n",
-        mimir_persona_intro,
-        "## 1. Executive Summary & Pareto-Härdad Sanning",
-        hardened_str,
-        "\n---\n",
-        "## 2. Mimers Reflektion & Motståndaranalys (Red-Team)",
-        f"**Reflektionsnoter:**\n{reflection_str}\n" if reflection_str else "",
-        f"**Avvärjda fallgropar:**\n{combined_critique[:1500]}\n" if combined_critique else "",
-        "\n---\n",
-        "## 3. Empirisk Omvärldsspaning (Omni-Channel Evidence)",
-        intel_context if intel_context else "Ingen omvärldsspaning genomförd.",
-        "\n---\n",
-        "## 4. Detaljerade Delresultat per Agent (med Evidence Contracts)",
-    ]
+    if is_en:
+        report_lines = [
+            f"# M Í M I R // Solution Matrix: {goal}",
+            f"\n**Produced by:** Mímir Autonomous Swarm ({backend_display} / {active_model}) | **Time:** {total_elapsed:.1f}s | **Tasks Completed:** {len(completed_data)}",
+            "\n---\n",
+            mimir_persona_intro,
+            "## 1. Executive Summary & Pareto-Hardened Truth",
+            hardened_str,
+            "\n---\n",
+            "## 2. Mímir's Reflection & Adversarial Analysis (Red-Team)",
+            f"**Reflection Notes:**\n{reflection_str}\n" if reflection_str else "",
+            f"**Averted Pitfalls:**\n{combined_critique[:1500]}\n" if combined_critique else "",
+            "\n---\n",
+            "## 3. Empirical Intelligence (Omni-Channel Evidence)",
+            intel_context if intel_context else "No external intelligence gathered.",
+            "\n---\n",
+            "## 4. Atomic Task Results per Agent (with Evidence Contracts)",
+        ]
+    else:
+        report_lines = [
+            f"# M Í M I R // Solution Matrix: {goal}",
+            f"\n**Framtagen av:** Mímir Autonomous Swarm ({backend_display} / {active_model}) | **Tid:** {total_elapsed:.1f}s | **Deluppgifter:** {len(completed_data)}",
+            "\n---\n",
+            mimir_persona_intro,
+            "## 1. Executive Summary & Pareto-Härdad Sanning",
+            hardened_str,
+            "\n---\n",
+            "## 2. Mimers Reflektion & Motståndaranalys (Red-Team)",
+            f"**Reflektionsnoter:**\n{reflection_str}\n" if reflection_str else "",
+            f"**Avvärjda fallgropar:**\n{combined_critique[:1500]}\n" if combined_critique else "",
+            "\n---\n",
+            "## 3. Empirisk Omvärldsspaning (Omni-Channel Evidence)",
+            intel_context if intel_context else "Ingen omvärldsspaning genomförd.",
+            "\n---\n",
+            "## 4. Detaljerade Delresultat per Agent (med Evidence Contracts)",
+        ]
 
     for node_id, data in completed_data.items():
         h = data.get("evidence_hash", "")
         h_str = f" [sha256:{h}]" if h else ""
-        report_lines.append(f"### Node [{node_id}] - {data.get('role', 'Agent')}: {data.get('title', 'Uppgift')}{h_str}")
+        report_lines.append(f"### Node [{node_id}] - {data.get('role', 'Agent')}: {data.get('title', 'Task' if is_en else 'Uppgift')}{h_str}")
         node_res = data.get('result', '')
         node_res_str = json.dumps(node_res, indent=2, ensure_ascii=False) if isinstance(node_res, (dict, list)) else str(node_res)
         report_lines.append(f"```text\n{node_res_str[:1500]}\n```\n")
@@ -421,12 +440,17 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
     json_path.write_text(json.dumps(json_payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
     if ui.console:
+        completed_title = "The Counsel of Mímir is complete!" if is_en else "Mimers råd är fullbordat!"
+        rep_saved = "📄 Report saved to:" if is_en else "📄 Rapport sparad till:"
+        json_saved = "📊 JSON structured data:" if is_en else "📊 JSON-strukturerad data:"
+        mem_saved = "🧠 Long-term memory updated:" if is_en else "🧠 Långtidsminne uppdaterat:"
+        tot_time = "⏱ Total time:" if is_en else "⏱ Total tid:"
         ui.console.print(Panel(
-            f"[bold gold1]{'Mimers råd är fullbordat!' if not is_en else 'The Counsel of Mímir is complete!'}[/bold gold1]\n\n"
-            f"📄 Rapport sparad till: [cyan]{out_path.resolve()}[/cyan]\n"
-            f"📊 JSON-strukturerad data: [cyan]{json_path.resolve()}[/cyan]\n"
-            f"🧠 Långtidsminne uppdaterat: [cyan]{memory.memory_path.resolve()}[/cyan]\n"
-            f"⏱ Total tid: [bold white]{total_elapsed:.1f}s[/bold white]",
+            f"[bold gold1]{completed_title}[/bold gold1]\n\n"
+            f"{rep_saved} [cyan]{out_path.resolve()}[/cyan]\n"
+            f"{json_saved} [cyan]{json_path.resolve()}[/cyan]\n"
+            f"{mem_saved} [cyan]{memory.memory_path.resolve()}[/cyan]\n"
+            f"{tot_time} [bold white]{total_elapsed:.1f}s[/bold white]",
             border_style="gold1",
             title="[bold gold1]M Í M I R // WISDOM DELIVERED[/bold gold1]"
         ))

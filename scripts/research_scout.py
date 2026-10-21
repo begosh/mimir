@@ -15,6 +15,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
+from mimir_config import is_english_text
 from typing import Any, Dict, List, Optional
 
 try:
@@ -70,7 +71,9 @@ class IntelligenceBrief:
         }
 
     def to_compact_markdown(self) -> str:
-        lines = [f"### Dynamisk Omvärldsspaning: {self.topic}\n"]
+        is_en = is_english_text(self.topic)
+        header = f"### Dynamic Intelligence Discovery: {self.topic}\n" if is_en else f"### Dynamisk Omvärldsspaning: {self.topic}\n"
+        lines = [header]
         if not self.items:
             lines.append("_Ingen extern data inhämtad._\n")
             return "\n".join(lines)
@@ -110,6 +113,7 @@ class ResearchScout:
         """
         Dynamically derives targeted venues based on semantic domain analysis.
         """
+        is_en = is_english_text(topic)
         directives: List[SourceDirective] = []
         t_lower = topic.lower()
 
@@ -127,13 +131,13 @@ class ResearchScout:
         # 1. Code / Architecture / Technical
         if any(w in t_lower for w in ["kod", "code", "arkitektur", "api", "protokoll", "system", "caching", "databas", "microservice"]):
             directives.append(SourceDirective(
-                channel_name="Källkod & Referensarkitektur",
+                channel_name=("Source Code & Reference Architecture" if is_en else "Källkod & Referensarkitektur"),
                 search_query=f"{topic} architecture implementation",
                 target_site="github.com",
                 engine="web",
             ))
             directives.append(SourceDirective(
-                channel_name="Ingenjörsdebatt & Post-Mortems",
+                channel_name=("Engineering Debate & Post-Mortems" if is_en else "Ingenjörsdebatt & Post-Mortems"),
                 search_query=f"{topic} in production",
                 target_site="news.ycombinator.com",
                 engine="web",
@@ -142,7 +146,7 @@ class ResearchScout:
         # 2. Science / Research / Mathematics
         if any(w in t_lower for w in ["forskning", "paper", "arxiv", "teori", "matematik", "algoritm", "modell", "ai", "llm", "rlm"]):
             directives.append(SourceDirective(
-                channel_name="Akademiska Preprints",
+                channel_name=("Academic Preprints (arXiv)" if is_en else "Akademiska Preprints"),
                 search_query=topic,
                 engine="arxiv",
             ))
@@ -150,14 +154,14 @@ class ResearchScout:
         # 3. Community / Real-world Field Experience
         if any(w in t_lower for w in ["erfarenhet", "problem", "bugg", "bästa sättet", "community", "hur gör man"]):
             directives.append(SourceDirective(
-                channel_name="Community & Fältstudier",
+                channel_name=("Community & Field Experience" if is_en else "Community & Fältstudier"),
                 search_query=f"{topic} discussions best practices",
                 engine="web",
             ))
 
         # 4. Universal Open Web Deep Dive (always included for breadth)
         directives.append(SourceDirective(
-            channel_name="Primärkällor & Teknisk Dokumentation",
+            channel_name=("Primary Specs & Documentation" if is_en else "Primärkällor & Teknisk Dokumentation"),
             search_query=f"{topic} documentation specification overview",
             engine="web",
         ))

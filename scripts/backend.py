@@ -404,9 +404,10 @@ class AgySwarmBackend(BaseSwarmBackend):
                 full_prompt += f"\n\n--- INPUT DATA ---\n{formatted_input}\n--- END INPUT DATA ---"
 
             system_instruction = (
-                f"Du är en högspecialiserad mikro-agent med rollen: '{role}'. "
-                f"Lös uppgiften koncist, sakligt och strukturerat. Svara direkt utan onödig hälsningsfras. "
-                f"Starta inte Mimir igen och delegera inte vidare."
+                f"You are a specialized micro-worker agent with role: '{role}'. "
+                f"Solve the task objectively, concisely, and rigorously. Answer directly without preamble. "
+                f"Do not launch Mimir or delegate this task. "
+                f"Match the language of the prompt (respond in English if prompt is in English, in Swedish if in Swedish)."
             )
 
             cmd = [
