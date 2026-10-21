@@ -109,6 +109,10 @@ class BaseSwarmBackend(ABC):
         }
         if os.name == "nt":
             kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+            suinfo = subprocess.STARTUPINFO()
+            suinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            suinfo.wShowWindow = subprocess.SW_HIDE
+            kwargs["startupinfo"] = suinfo
         else:
             kwargs["start_new_session"] = True
 
@@ -123,10 +127,14 @@ class BaseSwarmBackend(ABC):
         except (asyncio.TimeoutError, asyncio.CancelledError):
             if proc.returncode is None:
                 if os.name == "nt" and getattr(proc, "pid", None):
+                    suinfo = subprocess.STARTUPINFO()
+                    suinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    suinfo.wShowWindow = subprocess.SW_HIDE
                     killer = await asyncio.create_subprocess_exec(
                         "taskkill", "/PID", str(proc.pid), "/T", "/F",
                         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+                        startupinfo=suinfo,
                     )
                     await killer.wait()
                 elif getattr(proc, "pid", None):
