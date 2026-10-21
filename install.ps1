@@ -2,7 +2,7 @@
 .SYNOPSIS
     M Í M I R // Agent Skill Installer for Windows PowerShell
 .DESCRIPTION
-    Installs Mímir into OpenAI Codex CLI, Antigravity CLI, Claude Code, and skills.sh
+    Installs Mímir into Codex CLI, Antigravity CLI, Claude Code, OpenCode, and skills.sh
     either globally (~/.codex, ~/.gemini, ~/.agents) or project-locally.
 .EXAMPLE
     .\install.ps1 -Global
@@ -16,7 +16,7 @@
 param(
     [switch]$Global = $true,
     [string]$Project,
-    [ValidateSet("all", "codex", "antigravity", "claude", "agents")]
+    [ValidateSet("all", "codex", "antigravity", "claude", "opencode", "agents")]
     [string]$Target = "all",
     [switch]$Link,
     [switch]$SkipPip

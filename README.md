@@ -1,322 +1,347 @@
 # M Í M I R // The Omniscient Oracle & Autonomous Swarm
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Bilingual: EN / SV](https://img.shields.io/badge/Bilingual-EN%20%2F%20SV-gold.svg)](#)
-[![Backends: AGY | Codex | OpenAI | Claude | Ollama](https://img.shields.io/badge/Backends-AGY%20%7C%20Codex%20%7C%20OpenAI%20%7C%20Claude%20%7C%20Ollama-green.svg)](#)
+[![Bilingual: EN / SV](https://img.shields.io/badge/Bilingual-EN%20%2F%20SV-gold.svg)](#svenska)
 [![skills.sh](https://img.shields.io/badge/skills.sh-compliant-purple.svg)](https://skills.sh)
 
-> [English](#-english) | [Svenska](#-svenska)
+> *Drink from the Well. Truth distilled from the noise of the cosmos.*
 
----
+**Mímir is a research and problem-solving skill for your coding assistant**, backed
+by a Python swarm engine. Ask it to investigate a difficult question, review an
+architecture, or challenge a proposed solution. It researches sources, builds a
+task graph, runs specialist workers, applies adversarial critique, and returns
+a report with cumulative learning. Responses can be in English or Swedish.
 
-## 🇬🇧 English
+Use it inside your CLI harness with its existing login, or run the same engine
+directly from Python with a CLI or HTTP backend. CLI login reuse avoids separate
+API-key setup; it still consumes your account allowance or provider charges.
 
-> *"Drink from the Well. Truth distilled from the noise of the cosmos."*  
-> *"Drick ur Mimers brunn. Sanningen är silad ur kosmos brus."*
+[Skill usage](#use-mímir-as-a-skill) · [Supported harnesses](#supported-cli-harnesses) ·
+[Python usage](#run-the-python-engine-directly) · [Architecture](#how-the-swarm-works) ·
+[Svenska](#svenska)
 
-**M Í M I R** is an autonomous multi-agent epistemic research and problem-solving swarm engine, named after the wisest being in Norse mythology. Mímir unites ancient wisdom with modern agentic AI engineering to autonomously solve complex engineering, architectural, scientific, and strategic challenges.
+## Use Mímir as a skill
 
-It combines real-time omni-channel research scouting, Kahn-validated acyclic task DAGs, Joint Expected Value (JEV) System-1 decision gating, cryptographic EvidenceContracts, adversarial Red-Team critique with Genetic-Pareto Evolutionary Algorithm (GEPA) reflection, and persistent cumulative memory.
+Install into your current project, then start a new harness session so it can
+discover the skill:
 
----
-
-### 📦 Installation (skills.sh & Universal Installer)
-
-Mímir can be installed directly into your AI coding agent ecosystem (**OpenAI Codex CLI**, **Google Antigravity**, **Claude Code**, or any agent runtime supporting the open **skills.sh** standard) either **globally** or **project-locally**.
-
-#### Option 1: Via `skills.sh` (npx)
 ```bash
-# Add Mímir to current project
-npx skills add begosh/mimir
-
-# Add Mímir globally for all coding agents
-npx skills add begosh/mimir -g
+npx skills add begosh/mimir --skill mimir
 ```
 
-#### Option 2: Quick One-Liner Installers
-```bash
-# Linux / macOS / WSL (Global installation)
-curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --global
+Add `-g` for a global installation. Python 3.10+ and the dependencies in
+[requirements.txt](requirements.txt) are needed to run the swarm. The repository
+installer below also installs those dependencies.
 
-# Linux / macOS / WSL (Local project installation)
-curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --project
+Ask your assistant naturally:
+
+```text
+Use Mímir to review our background-job architecture. Inspect this repository,
+compare retry and idempotency strategies, and challenge the failure modes.
+Keep the design suitable for a small team.
 ```
 
-```powershell
-# Windows PowerShell (Global installation)
-irm https://raw.githubusercontent.com/begosh/mimir/main/install.ps1 | iex
+On first use in a project, Mímir asks which backend, worker model and effort you
+want. When the host is known, it suggests reusing that CLI login. It names the
+proposed worker settings before saving them in `.mimir/config.json`. Keys and
+conversation history are kept outside that file. Later runs reuse the agreed
+settings across hosting harnesses; Mímir asks again if the choice is unclear or
+the selected path fails its checks.
 
-# Windows PowerShell (Local project installation)
-& { irm https://raw.githubusercontent.com/begosh/mimir/main/install.ps1 } -Project .
+The **hosting assistant** and **swarm workers** have separate model settings.
+For example, a Codex host using `gpt-6.1-sol` at high effort can propose
+`gpt-6.1-sol` at low effort for workers. You can choose another available model.
+The choice is saved explicitly; workers do not silently inherit later changes
+to the host model. Lower effort does not guarantee a particular cost saving.
+
+### Example: AGY
+
+**Illustrative conversation, not a recorded run.** Start `agy` in your project:
+
+```text
+You: Use Mímir to review our retry and idempotency design.
+
+Assistant: Use your AGY CLI login for Mímir's swarm workers with
+gemini-3.8-flash-low at low effort, and remember this for the project?
+You can also choose another worker model or an API backend.
+
+You: Yes, remember those settings.
+
+Assistant: Mímir workers: AGY · gemini-3.8-flash-low · low effort.
+Research started; I'll relay sources and task progress as they arrive.
 ```
 
-#### Option 3: From Cloned Repository
+### Example: Codex
+
+**Illustrative conversation, assuming the named model is available.** Start
+`codex`; invoke `$mimir` or ask it to use Mímir:
+
+```text
+You: $mimir Review our background-job architecture and its failure modes.
+
+Assistant: Your Codex harness uses gpt-6.1-sol at high effort.
+Use your Codex CLI login with gpt-6.1-sol at low effort for Mímir's
+swarm workers, and remember this? You can choose another model or API access.
+
+You: Yes, use that model at low effort for the swarm.
+
+Assistant: Mímir workers: Codex · gpt-6.1-sol · low effort · ephemeral calls.
+The Python engine will run the task graph and red-team review.
+```
+
+### Example: OpenCode
+
+**Illustrative conversation, assuming the provider/model is available.** Start
+`opencode` in your project:
+
+```text
+You: Use Mímir to investigate the safest retry strategy for our workers.
+
+Assistant: Use OpenCode for Mímir's swarm workers with
+opencode/minimax-m3.1-flash-free, no effort variant, and remember this?
+Workers use disposable storage. You can choose another provider/model or API.
+
+You: Yes, remember it.
+
+Assistant: Mímir workers: OpenCode · opencode/minimax-m3.1-flash-free · variant none.
+I'll relay the engine's research, task completion and critique updates.
+```
+
+### Example: progress inside a harness
+
+**Illustrative updates after a successful setup.** Exact wording, task counts,
+sources and timings depend on the objective and actual engine events:
+
+```text
+Research: found documentation and reference implementations for review.
+Planning: the task graph is ready; low-value branches were screened by JEV.
+Swarm: independent analysis tasks are queued; dependent tasks wait for results.
+Swarm: the domain analysis completed; its findings are available to the critic.
+Critique: the red-team identified a retry/idempotency gap.
+Reflection: the revised proposal addresses the recorded critique.
+Complete: report and JSON results saved; synthesis and limitations follow.
+```
+
+The skill relays flushed engine activity and excerpts from returned results.
+These updates show work and findings; they do not expose private model reasoning.
+Delivery depends on the host's shell polling. The Python engine owns the DAG,
+JEV gate and shared blackboard throughout the run.
+
+## Supported CLI harnesses
+
+These four CLIs have implemented **worker adapters** and skill installer targets.
+The conversations above are examples, not an exhaustive list of supported hosts.
+A different host can load the skill and use a supported worker CLI through its
+shell tools; it needs a new adapter to become a worker backend itself.
+
+| Harness / worker CLI | Backend | Worker model and effort | Session handling | Validation in this checkout |
+| --- | --- | --- | --- | --- |
+| Antigravity (`agy`) | `agy` | Default `gemini-3.8-flash-low`, low | Per-call disposable home/XDG/temp storage | Live one-call probe succeeded |
+| OpenAI Codex CLI | `codex` | Agreed explicit model; propose known host model at low effort | Native `--ephemeral`, read-only sandbox | Preflight passed; live probe timed out |
+| Claude Code | `claude` | Default `haiku`; Haiku has no adjustable effort | Native `--no-session-persistence`, read/search tools | Preflight passed; live probe failed local authentication |
+| OpenCode | `opencode` | Explicit `provider/model`; supported variant or `none` | Per-call disposable home/XDG/temp storage, sharing disabled | Live one-call probe succeeded; normal session IDs unchanged |
+
+Offline tests cover adapter behavior and orchestration. These probes do not
+certify every model, CLI version or full live swarm. AGY/OpenCode may create
+temporary conversations during execution; normal cleanup removes that storage.
+OpenCode currently reuses `auth.json` credentials and does not support DB-only
+login. Its `--no-replay` option controls history rendering, not persistence.
+
+See [harness compatibility and validation](prompts/HARNESS_EXECUTION.md) for
+controls, authentication limits and sources. Direct HTTP backends are also
+available: `openai`, `anthropic`, and `ollama`. Mímir never silently switches a
+failed CLI run to HTTP access.
+
+## Install from the repository
+
 ```bash
 git clone https://github.com/begosh/mimir.git
 cd mimir
 
-# Install globally to all detected agents (Codex, Antigravity, Claude, skills.sh)
+# Install dependencies and copy the skill to supported global directories.
 python scripts/install.py --global
 
-# Install into a specific project directory
+# Or install into a chosen project.
 python scripts/install.py --project /path/to/project
 ```
 
----
+The installer packages the skill, scripts and prompts for Codex, AGY, Claude
+Code, OpenCode and the shared `.agents/skills` directory. It creates supported
+targets; it does not establish CLI login or certify installed model access.
+Run `python scripts/install.py --help` for target filtering and other options.
 
-### 🌟 Core Innovations & Architecture
+Shell installers are also available:
 
-```text
-[User Objective / Research Goal]
-         │
-         ├────────► [Load Cumulative Wisdom from LEARNINGS.md]
-         ▼
-[Phase 1: Mímir's Scryer] ──────► Dynamic Omni-Channel Scouting (GitHub, arXiv, Docs, Web)
-         │
-         ▼
-[Phase 2: Mimisbrunn's DAG] ────► Recursive Decomposition + JEV System-1 Pruning
-         │
-         ▼
-[Phase 3: The Rune Swarm] ──────► Parallel Micro-Agents + EvidenceContracts (SHA-256)
-         │
-         ▼
-[Phase 4: Mímir's Counsel] ─────► Adversarial Red-Team Critique & GEPA Pareto Mutation
-         │
-         ▼
-[Phase 5: The Word of Mímir] ───► Deliver Hardened Truth + Update LEARNINGS.md
-```
-
-1. **Dynamic Omni-Channel Research Scouting ([research_scout.py](file://./scripts/research_scout.py)):**
-   Dynamically identifies ground-truth authority sources for any given problem:
-   - **GitHub**: Reference implementations and source code.
-   - **arXiv**: Academic preprints and mathematics.
-   - **HackerNews**: Field engineering post-mortems and production battle scars.
-   - **Open Web**: Broad domain specifications without external API keys.
-2. **Kahn-Validated Recursive Task DAG ([task_graph.py](file://./scripts/task_graph.py)):**
-   Decomposes objectives into atomic, non-overlapping subtasks executed in topological tiers. Strict acyclicity checks and automated failure cascading prevent scheduling deadlocks.
-3. **JEV System-1 Decision Gate ([jev_gate.py](file://./scripts/jev_gate.py)):**
-   High-speed mathematical branch screening based on Joint Expected Value:
-   $$JEV = P(\text{impact}) \times \text{gain} - \text{cost}$$
-   Prunes low-value branches before execution to minimize latency and token usage.
-4. **Anti-Hallucination via EvidenceContracts:**
-   Every delivered subtask must provide verifiable citations and code, sealed with cryptographic SHA-256 hashes against a shared **Blackboard**.
-5. **Adversarial Red-Team & GEPA ([gepa_optimizer.py](file://./scripts/gepa_optimizer.py)):**
-   Stress-tests draft solutions against dedicated adversarial critics (Red-Team) and mutates the architecture along the Pareto front (resilience vs. simplicity).
-6. **Cumulative Long-Term Memory ([LEARNINGS.md](file://./LEARNINGS.md)):**
-   Saves and re-indexes proven patterns, edge-case hazards, and core heuristics across runs.
-7. **Modular Multi-Backend Engine ([backend.py](file://./scripts/backend.py)):**
-   Runs seamlessly across local and cloud backends:
-   - **OpenAI Codex CLI (`codex`)** – Zero API keys required; executes via `codex exec` inheriting your local authenticated Codex CLI session and proxy settings.
-   - **Antigravity CLI (`agy`)** – Zero API keys required; inherits existing local AGY authentication with sandboxed session isolation.
-   - **OpenAI API & Compatible Endpoints** (`gpt-4o-mini`, `gpt-4o`, Ollama, LMStudio, vLLM, OpenRouter).
-   - **Anthropic Claude API** (`claude-3-5-haiku-20241022`, `claude-3-7-sonnet-20250219`).
-
----
-
-### 🚀 Running Mímir
-
-##### Option A: OpenAI Codex CLI (Zero API keys, uses local Codex login)
 ```bash
-python scripts/mimir.py "Design a fault-tolerant distributed cache with Redis and consistent hashing" --backend codex
-```
-
-##### Option B: Antigravity CLI (Zero API keys, default if `agy` is present)
-```bash
-python scripts/mimir.py "Design a fault-tolerant distributed cache with Redis and consistent hashing" --backend agy
-```
-
-##### Option C: OpenAI API
-```bash
-export OPENAI_API_KEY="sk-..."
-python scripts/mimir.py "Optimal architecture for asynchronous background task workers" --backend openai --model gpt-4o-mini
-```
-
-##### Option D: Anthropic Claude API
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-python scripts/mimir.py "Audit and stress-test custom consensus protocol against split-brain" --backend anthropic --model claude-3-5-haiku-20241022
-```
-
-##### Option E: Local Ollama / Offline
-```bash
-export OPENAI_BASE_URL="http://localhost:11434/v1"
-python scripts/mimir.py "Analyze patterns for idempotent APIs" --backend openai --model qwen2.5:7b
-```
-
----
-
-### 🛠 CLI Parameters
-
-| Flag | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `goal` | `str` | *(required)* | Target objective, research query, or design challenge |
-| `--backend` / `-b` | `str` | `auto` | Backend engine: `auto`, `codex`, `agy`, `openai`, `anthropic`, `ollama` |
-| `--model` / `-m` | `str` | Auto | Model name tailored to the selected backend |
-| `--output` / `-o` | `str` | `artifacts/mimir_solution.md` | Path for the generated markdown report |
-| `--skip-web` | flag | `false` | Skip external omni-channel web scouting |
-| `--depth` | `int` | `2` | Maximum decomposition depth for the task graph |
-| `--sources` / `-s` | `str` | `None` | Comma-separated domain filter (e.g. `github.com,arxiv.org`) |
-| `--no-jev` | flag | `false` | Disable JEV System-1 branch screening |
-
----
-
-### 📁 Project Structure
-
-```text
-mimir/
-├── SKILL.md                          # Antigravity, Codex & skills.sh skill definition
-├── LEARNINGS.md                      # Persistent long-term memory bank & core heuristics
-├── README.md                         # Bilingual documentation (English / Swedish)
-├── requirements.txt                  # Minimal Python dependencies
-├── install.sh                        # Bash installer (Linux / macOS / WSL)
-├── install.ps1                       # PowerShell installer (Windows)
-├── prompts/
-│   ├── MIMIR_SYSTEM_PROMPT.md        # System prompt for Claude, ChatGPT, Codex, Cursor
-│   └── MIMIR_PORTING_PROMPT.md       # Meta-prompt for porting Mímir to other environments
-└── scripts/
-    ├── install.py                    # Cross-platform Python skill installer
-    ├── mimir.py                      # Main orchestrator & Rich terminal HUD
-    ├── backend.py                    # Multi-backend engine (Codex, AGY, OpenAI, Claude, Ollama)
-    ├── agy_swarm.py                  # Portable wrapper for agy CLI
-    ├── task_graph.py                 # Kahn DAG, Blackboard, and EvidenceContract
-    ├── jev_gate.py                   # System-1 JEV decision and screening gate
-    ├── research_scout.py             # Omni-channel research scout (arXiv, GitHub, HackerNews)
-    ├── jarvis_memory.py              # Cumulative memory management engine
-    ├── gepa_optimizer.py             # Genetic-Pareto evolutionary reflection engine
-    ├── swarm_runner.py               # Lightweight CLI task forwarder
-    └── clean_backend_sessions.py     # Session cleanup utility
-```
-
----
-
-## 🇸🇪 Svenska
-
-> *"Drick ur Mimers brunn. Sanningen är silad ur kosmos brus."*  
-> *"Drink from the Well. Truth distilled from the noise of the cosmos."*
-
-**M Í M I R** är en autonom multi-agent- och orakelsvärm för djup forskning, arkitekturdesign och komplex problemlösning, uppkallad efter asatrons visaste varelse. Mímir kombinerar uråldrig visdom med modern AI-ingenjörskonst för att självständigt reda ut och lösa svåra tekniska och strategiska utmaningar.
-
-Systemet förenar dynamisk omvärldsspaning i realtid, Kahn-validerade acykliska uppgiftsgrafer (DAG), Joint Expected Value (JEV) System-1-beslutsgrindar, kryptografiska EvidenceContracts, adversariell Red-Team-granskning med genetisk Pareto-reflektion (GEPA) och ett beständigt kumulativt minne.
-
----
-
-### 📦 Installation (skills.sh & Universell Installer)
-
-Mímir kan installeras direkt i din AI-agentmiljö (**OpenAI Codex CLI**, **Google Antigravity**, **Claude Code** eller valfri agent som stödjer den öppna standarden **skills.sh**), antingen **globalt** eller **i ett specifikt projekt**.
-
-#### Alternativ 1: Via `skills.sh` (npx)
-```bash
-# Lägg till Mímir i det aktuella projektet
-npx skills add begosh/mimir
-
-# Installera Mímir globalt för alla AI-kodassistenter
-npx skills add begosh/mimir -g
-```
-
-#### Alternativ 2: Snabbinstallation via One-Liner
-```bash
-# Linux / macOS / WSL (Global installation)
+# Linux / macOS / WSL
 curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --global
-
-# Linux / macOS / WSL (Projektlokal installation)
-curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --project
 ```
 
 ```powershell
-# Windows PowerShell (Global installation)
+# Windows PowerShell
 irm https://raw.githubusercontent.com/begosh/mimir/main/install.ps1 | iex
-
-# Windows PowerShell (Projektlokal installation)
-& { irm https://raw.githubusercontent.com/begosh/mimir/main/install.ps1 } -Project .
 ```
 
-#### Alternativ 3: Från Klonat Repo
+## Run the Python engine directly
+
+From a cloned repository:
+
 ```bash
-git clone https://github.com/begosh/mimir.git
-cd mimir
+python -m pip install -r requirements.txt
 
-# Installera globalt till alla identifierade agenter (Codex, Antigravity, Claude, skills.sh)
-python scripts/install.py --global
+# Inspect project settings and available CLIs without invoking a model.
+python scripts/mimir.py --config-status
 
-# Installera till en specifik projektkatalog
-python scripts/install.py --project /sökväg/till/projekt
+# Save your chosen worker backend, model and effort.
+python scripts/mimir.py --configure --backend agy --model gemini-3.8-flash-low --effort low
+
+# Validate the selected CLI's flags and settings without a model call.
+python scripts/mimir.py --check
+
+# Run with the saved settings and the Rich terminal display.
+python scripts/mimir.py "Review our background-job architecture and retry strategy"
 ```
 
----
+The Python entrypoint expects you to configure a backend or pass one explicitly.
+It stops before model calls if neither exists. The interactive first-use
+question is handled by the hosting skill; `--configure` saves your explicit
+selection for direct Python use.
 
-### 🌟 Kärnfunktioner & Innovationer
+### One-run CLI examples
 
-1. **Dynamisk Omni-Channel Världsspaning ([research_scout.py](file://./scripts/research_scout.py)):**
-   Identifierar och söker automatiskt i relevanta primärkällor beroende på domän: GitHub (källkod), arXiv (forskning och matematik), HackerNews (post-mortems och produktionserfarenhet), samt öppna webben utan API-nycklar.
-2. **Kahn-Validerad Rekursiv RLM DAG ([task_graph.py](file://./scripts/task_graph.py)):**
-   Dekomponerar komplexa mål till atomära, icke-överlappande deluppgifter med strikt acyklisk validering och automatisk felkaskadering för att förhindra schemaläggnings-deadlocks.
-3. **JEV System-1 Beslutsgrind ([jev_gate.py](file://./scripts/jev_gate.py)):**
-   Matematisk grenbeskärning och snabb typad beslutsfattning baserad på Joint Expected Value:
-   $$JEV = P(\text{impact}) \times \text{gain} - \text{cost}$$
-   Beskär bort onödiga noder för att minimera latens och resursåtgång.
-4. **Anti-Hallucination via EvidenceContracts:**
-   Varje levererat delresultat förankras med kryptografiska SHA-256-hashar mot en delad **Blackboard**.
-5. **Adversariell Red-Team Prövning & GEPA ([gepa_optimizer.py](file://./scripts/gepa_optimizer.py)):**
-   Stresstestar lösningen mot en dedikerad motståndarkritiker (Red-Team) och muterar lösningen längs Pareto-fronten (härdighet kontra enkelhet).
-6. **Kumulativt Långtidsminne ([LEARNINGS.md](file://./LEARNINGS.md)):**
-   Sparar och läser in beprövade mönster, undvikna fallgropar och kärnheuristiker mellan körningar.
-7. **Modulärt Multi-Backend Stöd ([backend.py](file://./scripts/backend.py)):**
-   Körs sömlöst med:
-   - **OpenAI Codex CLI (`codex`)** – Noll externa API-nycklar; körs via `codex exec` och ärver befintlig lokal Codex-autentisering och proxykonfiguration.
-   - **Antigravity CLI (`agy`)** – Noll externa API-nycklar; ärver befintlig lokal autentisering och sandlåde-isolerar sessioner.
-   - **OpenAI API & Kompatibla endpoints** (`gpt-4o-mini`, `gpt-4o`, samt Ollama, LMStudio, vLLM, OpenRouter).
-   - **Anthropic Claude API** (`claude-3-5-haiku-20241022`, `claude-3-7-sonnet-20250219`).
+Replace placeholder models/variants with values available to your login:
 
----
-
-### 🚀 Kör Mímir
-
-##### Alternativ A: OpenAI Codex CLI (Noll API-nycklar via lokal Codex-session)
 ```bash
-python scripts/mimir.py "Designa en härdad distribuerad cache med Redis och konsistent hashing" --backend codex
+python scripts/mimir.py "Review our retry design" --backend agy
+python scripts/mimir.py "Review our retry design" --backend claude
+python scripts/mimir.py "Review our retry design" --backend codex --model <available-worker-model> --effort low
+python scripts/mimir.py "Review our retry design" --backend opencode --model <provider/model> --effort <variant-or-none>
 ```
 
-##### Alternativ B: Antigravity CLI (Noll API-nycklar, standard om `agy` finns installerat)
+These overrides do not rewrite the saved profile. For a longer objective, put
+the question, relevant paths and constraints in a UTF-8 file:
+
 ```bash
-python scripts/mimir.py "Designa en härdad distribuerad cache med Redis och konsistent hashing" --backend agy
+python -u scripts/mimir.py --goal-file objective.txt --progress jsonl --output artifacts/review.md
 ```
 
-##### Alternativ C: OpenAI API
+`terminal` is the default progress format; `jsonl` emits flushed activity for a
+hosting assistant or other consumer. A successful run writes a Markdown report
+and JSON sidecar, then appends learning to `LEARNINGS.md` beside the installed
+engine. Separate copied installations have separate learning files.
+
+### HTTP and local-model examples
+
+Configure credentials in your environment before using a hosted HTTP provider:
+`OPENAI_API_KEY` for OpenAI-compatible access, or `ANTHROPIC_API_KEY` for Anthropic.
+Use `OPENAI_BASE_URL` for an OpenAI-compatible endpoint such as LM Studio or vLLM.
+Keep credentials outside the saved Mímir profile.
+
 ```bash
-export OPENAI_API_KEY="sk-..."
-python scripts/mimir.py "Optimal arkitektur för asynkrona bakgrundsjobb" --backend openai --model gpt-4o-mini
+python scripts/mimir.py "Compare background-job designs" --backend openai --model gpt-4o-mini
+python scripts/mimir.py "Challenge our retry assumptions" --backend anthropic --model <available-anthropic-model>
+python scripts/mimir.py "Analyze idempotent APIs" --backend ollama --model <installed-local-model> --skip-web
 ```
 
-##### Alternativ D: Anthropic Claude
+The Ollama backend defaults to `http://localhost:11434/v1`; an installed model
+and running Ollama service are required. `--skip-web` excludes external scouting.
+HTTP adapters currently do not send reasoning-effort parameters.
+
+### Useful options
+
+| Option | Behavior |
+| --- | --- |
+| `--config-status`, `--configure` | Inspect or save project backend/model/effort |
+| `--host`, `--host-model` | Supply known host information for a setup suggestion; never save automatically |
+| `--backend`, `--model`, `--effort` | Override worker settings for this run |
+| `--check` | Validate CLI flags/settings; does not verify login or model access |
+| `--goal-file` | Load a UTF-8 objective with context and constraints |
+| `--progress terminal\|jsonl` | Rich display or flushed activity events |
+| `--concurrency` | Maximum concurrent workers; default 4 |
+| `--worker-timeout` | Timeout per CLI call; default 180 seconds |
+| `--output` | Report path; default `artifacts/mimir_solution.md` |
+| `--skip-web`, `--sources` | Disable scouting or add comma-separated source domains |
+| `--depth`, `--no-jev` | Set decomposition depth or disable JEV screening |
+
+Settings resolve from explicit arguments, then `MIMIR_BACKEND`,
+`MIMIR_<BACKEND>_MODEL` / `MIMIR_MODEL`, and `MIMIR_EFFORT`, then the saved
+matching backend profile. A different backend never inherits another backend's
+saved model or effort. Run `python scripts/mimir.py --help` for the full CLI.
+
+## How the swarm works
+
+The [skill](SKILL.md) captures the objective, agrees on execution settings, starts
+the Python engine through the host's shell, and presents the results. The
+engine preserves Mímir's five-phase design across all worker backends:
+
+```text
+Objective + cumulative learning
+              ↓
+1. Research scouting → source context
+              ↓
+2. Recursive task decomposition → acyclic DAG + JEV screening
+              ↓
+3. Parallel specialist workers → EvidenceContracts + shared blackboard
+              ↓
+4. Red-team critique → GEPA reflection and revised solution
+              ↓
+5. Synthesis → report + cumulative learning
+```
+
+The DAG carries dependency results to later workers and cascades failures.
+Worker calls are fresh and receive self-contained context; they do not resume
+the host conversation. Native host sub-agents are not an automatic substitute
+for this engine. EvidenceContract hashes record output identity; source quality
+and factual correctness still require assessment.
+
+Implementation: [orchestrator](scripts/mimir.py), [worker adapters](scripts/backend.py),
+[project configuration](scripts/mimir_config.py), [DAG and blackboard](scripts/task_graph.py),
+[JEV gate](scripts/jev_gate.py), [research scout](scripts/research_scout.py),
+[GEPA reflection](scripts/gepa_optimizer.py), [learning](scripts/jarvis_memory.py).
+The [porting specification](prompts/MIMIR_PORTING_PROMPT.md) describes the design
+to preserve when adding another adapter.
+
+## Svenska
+
+> *Drick ur Mimers brunn. Sanningen är silad ur kosmos brus.*
+
+**Mímir är en skill för forskning, arkitekturgranskning och komplex
+problemlösning**, med en Python-motor som kör svärmen. Installera med
+`npx skills add begosh/mimir --skill mimir` och be din kodassistent:
+
+```text
+Använd Mímir för att granska vår arkitektur för bakgrundsjobb.
+Jämför återförsök och idempotens, och utmana antagandena.
+```
+
+Vid första användningen föreslår Mímir CLI-inloggning eller API och frågar vilken
+modell och ansträngningsnivå svärmens arbetare ska använda. Värdens modell och
+arbetarnas inställningar visas separat. Exempel: Codex med `gpt-6.1-sol high`
+kan föreslå `gpt-6.1-sol low` för svärmen. Valet sparas i projektets
+`.mimir/config.json`, utan nycklar eller konversationshistorik, och återanvänds.
+
+Implementerade CLI-adaptrar är **AGY, Codex, Claude Code och OpenCode**.
+Samtalen ovan är illustrativa exempel; valideringsstatus och begränsningar finns
+i tabellen och [kompatibilitetsguiden](prompts/HARNESS_EXECUTION.md). CLI-inloggning
+undviker separat API-nyckelhantering men förbrukar kontots tilldelning eller
+leverantörens debitering. OpenCode använder tillfällig lagring; `--no-replay`
+styr visning av historik och gör inte en session flyktig.
+
+Samma motor kan köras direkt från Python:
+
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-python scripts/mimir.py "Stresstesta protokollimplementering mot race conditions" --backend anthropic --model claude-3-5-haiku-20241022
+python -m pip install -r requirements.txt
+python scripts/mimir.py --configure --backend agy --model gemini-3.8-flash-low --effort low
+python scripts/mimir.py --check
+python scripts/mimir.py "Granska vår strategi för återförsök och idempotens"
 ```
 
-##### Alternativ E: Lokal Ollama / Offline
-```bash
-export OPENAI_BASE_URL="http://localhost:11434/v1"
-python scripts/mimir.py "Analysera mönster för idempotenta API:er" --backend openai --model qwen2.5:7b
-```
+Motorn hanterar forskning, DAG/JEV, parallella arbetare och Blackboard,
+motståndargranskning/GEPA och slutrapport med lärdomar. Skillen visar verkliga
+statushändelser och sammanfattningar från resultaten. Ett hashvärde styrker
+resultatets identitet; det garanterar inte att uppgifterna är sanna.
 
----
+## License
 
-### 🛠 CLI-Parametrar
-
-| Flagga | Typ | Standard | Beskrivning |
-| :--- | :--- | :--- | :--- |
-| `goal` | `str` | *(obligatorisk)* | Målet, frågan eller optimeringsuppgiften |
-| `--backend` / `-b` | `str` | `auto` | Backend: `auto`, `codex`, `agy`, `openai`, `anthropic`, `ollama` |
-| `--model` / `-m` | `str` | Auto | Mikromodellnamn anpassat efter vald backend |
-| `--output` / `-o` | `str` | `artifacts/mimir_solution.md` | Sökväg för genererad markdown-rapport |
-| `--skip-web` | flagga | `false` | Hoppa över extern omvärldsspaning |
-| `--depth` | `int` | `2` | Maximalt dekompositionsdjup i uppgiftsgrafen |
-| `--sources` / `-s` | `str` | `None` | Kommaseparerad lista över prioriterade källdomäner |
-| `--no-jev` | flagga | `false` | Inaktivera JEV System-1 grenbeskärning |
-
----
-
-## 📜 Licens / License
-
-MIT License. Fri att använda, anpassa och distribuera / Free to use, modify, and distribute.
+[MIT](LICENSE). Fri att använda, anpassa och distribuera.

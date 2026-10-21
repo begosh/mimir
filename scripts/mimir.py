@@ -33,11 +33,12 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from backend import BaseSwarmBackend, SwarmResult, SwarmTask, create_swarm_backend
+from mimir_config import ConfigurationRequired, configure, config_status, resolve_execution
 from gepa_optimizer import GepaOptimizer
 from jarvis_memory import JarvisMemory
 from jev_gate import JevDecisionGate
 from research_scout import IntelligenceBrief, ResearchScout
-from task_graph import Blackboard, RecursiveDecomposer, TaskGraph, TaskNode
+from task_graph import Blackboard, RecursiveDecomposer, TaskGraph, TaskNode, TaskStatus
 
 # Rich UI imports
 try:
@@ -62,12 +63,35 @@ def is_english_text(text: str) -> bool:
 
 
 class MimirConsole:
-    def __init__(self, is_en: bool = False):
-        self.console = Console(highlight=False) if HAS_RICH else None
+    def __init__(self, is_en: bool = False, progress_format: str = "terminal"):
+        self.console = Console(highlight=False) if HAS_RICH and progress_format == "terminal" else None
         self.is_en = is_en
+        self.progress_format = progress_format
+        self.started_at = time.monotonic()
+        self.sequence = 0
 
-    def print_banner(self, goal: str, model: str, backend_name: str, memory_stats: Optional[Dict[str, Any]] = None):
+    def emit(self, event: str, **data: Any):
+        """Public execution activity and final-output excerpts, never model reasoning."""
+        if self.progress_format == "jsonl":
+            self.sequence += 1
+            print(json.dumps({
+                "schema_version": 1, "sequence": self.sequence, "event": event,
+                "elapsed_seconds": round(time.monotonic() - self.started_at, 3),
+                **data,
+            }, ensure_ascii=False), flush=True)
+
+    def notice(self, event: str, message: str, **data: Any):
+        self.emit(event, message=message, **data)
+        if self.progress_format == "terminal":
+            print(message, flush=True)
+
+    def print_banner(self, goal: str, model: str, backend_name: str, memory_stats: Optional[Dict[str, Any]] = None,
+                     web_enabled: bool = True, jev_enabled: bool = True):
         entries = memory_stats.get('entries', 0) if memory_stats else 0
+        self.emit("run_started", backend=backend_name, model=model, memory_entries=entries,
+                  web_enabled=web_enabled, jev_enabled=jev_enabled)
+        if self.progress_format == "jsonl":
+            return
         if self.is_en:
             title = "[bold gold1]M Í M I R // Keeper of Wisdom & Autonomous Swarm[/bold gold1]"
             sub = "[italic dim]\"Drink from the Well. Truth distilled from the noise of the cosmos.\"[/italic dim]"
@@ -80,7 +104,7 @@ class MimirConsole:
             lbl_goal = "UPPDRAG"
 
         banner_text = f"{title}\n{sub}\n\n[bold white]{lbl_goal}:[/bold white] [green]{goal}[/green]\n"
-        banner_text += f"[dim]Motor: {backend_name} ({model}) | {mem_text} | Nätverk: Omni-Channel | JEV-Gate: Aktiv[/dim]"
+        banner_text += f"[dim]Motor: {backend_name} ({model}) | {mem_text} | Web: {'on' if web_enabled else 'off'} | JEV: {'on' if jev_enabled else 'off'}[/dim]"
 
         if self.console:
             self.console.print(Panel(banner_text, border_style="gold1", title="[bold gold1]MIMISBRUNNR ONLINE[/bold gold1]"))
@@ -89,12 +113,21 @@ class MimirConsole:
 
     def print_phase(self, phase_num: int, title_sv: str, title_en: str):
         title = title_en if self.is_en else title_sv
+        self.emit("phase_started", phase=phase_num, title=title)
+        if self.progress_format == "jsonl":
+            return
         if self.console:
             self.console.print(f"\n[bold gold1]>> FAS {phase_num}: {title.upper()}[/bold gold1]")
         else:
             print(f"\n--- FAS {phase_num}: {title} ---")
 
     def display_intel(self, brief: IntelligenceBrief):
+        self.emit("research_completed", source_count=len(brief.items), sources=[
+            {"title": item.title, "channel": item.channel, "url": item.url}
+            for item in brief.items[:6]
+        ])
+        if self.progress_format == "jsonl":
+            return
         if not self.console:
             print(brief.to_compact_markdown())
             return
@@ -111,6 +144,13 @@ class MimirConsole:
         self.console.print(table)
 
     def display_dag(self, graph: TaskGraph):
+        self.emit("graph_ready", tasks=[
+            {"id": n.id, "role": n.role, "title": n.title,
+             "dependencies": sorted(n.dependencies), "jev_score": n.jev_score}
+            for n in graph.nodes.values()
+        ], tiers=[[n.id for n in tier] for tier in graph.get_execution_tiers()])
+        if self.progress_format == "jsonl":
+            return
         if not self.console:
             print(f"Task Graph with {len(graph.nodes)} nodes:")
             for n in graph.nodes.values():
@@ -132,33 +172,74 @@ class MimirConsole:
         self.console.print(tree)
 
     def display_agent_done(self, node: TaskNode, duration: float, evidence_hash: str = ""):
+        if self.progress_format == "jsonl":
+            return
         hash_tag = f" [dim cyan]sha256:{evidence_hash}[/dim cyan]" if evidence_hash else ""
         if self.console:
             self.console.print(f"  [green][OK][/green] [[cyan]{node.id}[/cyan]] [bold]{node.role}[/bold]: {node.title} [dim]({duration:.1f}s)[/dim]{hash_tag}")
         else:
             print(f"  [OK] {node.id} {node.role}: {node.title} ({duration:.1f}s){hash_tag}")
 
+    def display_agent_submitted(self, node: TaskNode):
+        self.emit("task_submitted", node_id=node.id, role=node.role, title=node.title)
+        if self.progress_format == "terminal":
+            if self.console:
+                self.console.print(f"  [cyan][QUEUED][/cyan] {node.id} {node.role}: {node.title}")
+            else:
+                print(f"  [QUEUED] {node.id} {node.role}: {node.title}", flush=True)
+
 
 async def run_mimir(
     goal: str,
     output_path: str = "artifacts/mimir_solution.md",
     model: Optional[str] = None,
-    backend: str = "auto",
+    backend: Optional[str] = None,
     skip_web: bool = False,
     max_depth: int = 2,
     sources: Optional[List[str]] = None,
     enable_jev: bool = True,
+    effort: Optional[str] = None,
+    worker_timeout: float = 180,
+    max_concurrency: int = 4,
+    progress_format: str = "terminal",
 ):
+    if progress_format not in ("terminal", "jsonl"):
+        raise ValueError("Progress format must be terminal or jsonl.")
+    ui = MimirConsole(is_en=is_english_text(goal), progress_format=progress_format)
+    try:
+        backend, model, effort = resolve_execution(backend, model, effort)
+        await _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
+                         sources, enable_jev, effort, worker_timeout, max_concurrency, ui)
+    except asyncio.CancelledError:
+        ui.emit("run_cancelled")
+        raise
+    except ConfigurationRequired as exc:
+        ui.emit("configuration_required", message=str(exc))
+        raise
+    except Exception as exc:
+        ui.emit("run_failed", error_type=type(exc).__name__, message=str(exc)[:500])
+        raise
+
+
+async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
+                     sources, enable_jev, effort, worker_timeout, max_concurrency, ui):
     is_en = is_english_text(goal)
+    swarm = create_swarm_backend(backend_type=backend, model=model, max_concurrency=max_concurrency,
+                                 effort=effort, timeout_seconds=worker_timeout)
+    if hasattr(swarm, "help_command"):
+        await swarm.check_cli()
     memory = JarvisMemory()
     mem_stats = memory.get_summary_stats()
 
-    swarm = create_swarm_backend(backend_type=backend, model=model, max_concurrency=4)
     active_model = model or getattr(swarm, "default_model", "gemini-3.8-flash-low")
     backend_display = swarm.__class__.__name__.replace("SwarmBackend", "")
 
-    ui = MimirConsole(is_en=is_en)
-    ui.print_banner(goal, active_model, backend_display, memory_stats=mem_stats)
+    ui.print_banner(goal, active_model, backend_display, memory_stats=mem_stats,
+                    web_enabled=not skip_web, jev_enabled=enable_jev)
+    if hasattr(swarm, "session_policy"):
+        ui.notice("worker_settings", f"Workers: effort={swarm.default_effort}; sessions={swarm.session_policy}; timeout={worker_timeout}s",
+                  effort=swarm.default_effort, session_policy=swarm.session_policy,
+                  timeout_seconds=worker_timeout, concurrency=max_concurrency)
 
     blackboard = Blackboard(session_id=str(int(time.time())))
     jev_gate = JevDecisionGate(swarm=swarm) if enable_jev else None
@@ -175,6 +256,7 @@ async def run_mimir(
         ui.display_intel(intel_brief)
     else:
         ui.print_phase(1, "Hoppar över extern spaning (--skip-web)", "Skipping external discovery (--skip-web)")
+        ui.emit("research_skipped")
 
     intel_context = intel_brief.to_compact_markdown()
     memory_context = memory.load_memory_context(topic=goal)
@@ -192,9 +274,9 @@ async def run_mimir(
 
     if jev_gate:
         pruned_nodes = await task_graph.prune_with_jev(jev_gate=jev_gate, min_jev=0.30)
-        if pruned_nodes and ui.console:
+        if pruned_nodes:
             msg = f"Beskar bort {len(pruned_nodes)} noder med låg JEV: {', '.join(pruned_nodes)}" if not is_en else f"Pruned {len(pruned_nodes)} low-JEV branches: {', '.join(pruned_nodes)}"
-            ui.console.print(f"  [yellow][JEV-PRUNED][/yellow] {msg}")
+            ui.notice("tasks_pruned", msg, node_ids=pruned_nodes, threshold=0.30)
 
     ui.display_dag(task_graph)
 
@@ -204,15 +286,29 @@ async def run_mimir(
     ui.print_phase(3, "Runornas Svärm (Parallell Exekvering & Evidensavtal)", "Swarm of Runes (Parallel Execution & Evidence Contracts)")
 
     def on_task_finish(node: TaskNode, res: SwarmResult, contract: Optional[Any] = None):
+        if res.status != "SUCCESS":
+            ui.notice("task_failed", f"  [ERROR] {node.id} {node.role}: {res.raw_response[:300]}",
+                      node_id=node.id, role=node.role, duration_seconds=res.duration_seconds)
+            return
         h = contract.raw_evidence_hash[:10] if contract and hasattr(contract, "raw_evidence_hash") else ""
+        result = json.dumps(res.data, ensure_ascii=False) if isinstance(res.data, (dict, list)) else str(res.data)
+        ui.emit("task_completed", node_id=node.id, role=node.role, title=node.title,
+                duration_seconds=res.duration_seconds, evidence_hash=h,
+                output_excerpt=result[:400])
         ui.display_agent_done(node, res.duration_seconds, evidence_hash=h)
 
     completed_data = await swarm.execute_graph(
         graph=task_graph,
         blackboard=blackboard,
         jev_gate=jev_gate,
+        on_task_start=ui.display_agent_submitted,
         on_task_finish=on_task_finish,
     )
+    failed_nodes = [n.id for n in task_graph.nodes.values() if n.status != TaskStatus.COMPLETED]
+    if failed_nodes:
+        ui.emit("graph_incomplete", tasks=[{"id": n.id, "status": n.status.value}
+                                          for n in task_graph.nodes.values() if n.status != TaskStatus.COMPLETED])
+        raise RuntimeError(f"Swarm incomplete ({', '.join(failed_nodes)}); no completed report or learning recorded.")
 
     # -------------------------------------------------------------------------
     # Fas 4: Mimers Råd & Red-Team Prövning (GEPA Pareto-Härdning)
@@ -232,6 +328,8 @@ async def run_mimir(
 
     combined_draft = "\n\n".join(draft_solutions) if draft_solutions else "Lösning genererad av Mímir."
     combined_critique = "\n\n".join(red_team_critiques) if red_team_critiques else "Ingen explicit kritik."
+    ui.emit("critique_collected", critique_count=len(red_team_critiques),
+            output_excerpt=combined_critique[:600] if red_team_critiques else "")
 
     gepa = GepaOptimizer(swarm=swarm, critic_model=active_model)
     hardened_solution, reflection = await gepa.reflective_evolve(
@@ -239,6 +337,7 @@ async def run_mimir(
         goal=goal,
         critique_points=combined_critique[:2500],
     )
+    ui.emit("reflection_completed", output_excerpt=str(reflection)[:600])
 
     if ui.console:
         ui.console.print(f"  [green][OK][/green] [bold]{'Mímir har härdat visdomen mot motståndarkritik.' if not is_en else 'Mímir has hardened the wisdom against adversarial critique.'}[/bold]")
@@ -308,6 +407,8 @@ async def run_mimir(
         "persona": "Mímir",
         "backend": backend_display,
         "model": active_model,
+        "worker_effort": swarm.default_effort,
+        "session_policy": getattr(swarm, "session_policy", "direct HTTP; no CLI session"),
         "elapsed_seconds": total_elapsed,
         "intel_brief": intel_brief.to_dict(),
         "task_results": completed_data,
@@ -331,17 +432,32 @@ async def run_mimir(
         ))
         ui.console.print(f"\n[bold gold1]{'Mimers sammanfattning:' if not is_en else 'Summary from Mímir:'}[/bold gold1]\n")
         ui.console.print(Markdown(hardened_str[:1500] + ("..." if len(hardened_str) > 1500 else "")))
-    else:
+    elif ui.progress_format == "terminal":
         print(f"\n[OK] Rapport sparad till {out_path.resolve()} ({total_elapsed:.1f}s)")
 
     swarm.cleanup()
+    ui.emit("run_completed", report_path=str(out_path.resolve()), json_path=str(json_path.resolve()),
+            task_count=len(completed_data), duration_seconds=total_elapsed)
 
 
 def main():
     parser = argparse.ArgumentParser(description="M Í M I R // Omniscient Oracle & Autonomous Swarm")
-    parser.add_argument("goal", type=str, help="Det komplexa målet, forskningsfrågan eller strategin.")
+    parser.add_argument("goal", nargs="?", type=str, help="Det komplexa målet, forskningsfrågan eller strategin.")
+    parser.add_argument("--goal-file", type=str, help="UTF-8 file containing the objective and required context")
+    parser.add_argument("--check", action="store_true", help="Check CLI and worker settings without a model call")
+    setup = parser.add_mutually_exclusive_group()
+    setup.add_argument("--config-status", action="store_true", help="Show saved project profile and available CLIs without a model call")
+    setup.add_argument("--configure", action="store_true", help="Save an explicitly agreed backend/model/effort in .mimir/config.json")
+    parser.add_argument("--host", choices=["agy", "codex", "claude", "opencode"],
+                        help="Hosting CLI suggestion for --config-status; never automatically saves a choice")
+    parser.add_argument("--host-model", help="Known host model for a first-use worker suggestion; does not select or save it")
     parser.add_argument("--output", "-o", type=str, default="artifacts/mimir_solution.md", help="Sökväg för rapport")
-    parser.add_argument("--backend", "-b", type=str, default="auto", choices=["auto", "agy", "codex", "openai", "anthropic", "ollama"], help="LLM-backend motor (auto, agy, codex, openai, anthropic, ollama)")
+    parser.add_argument("--backend", "-b", type=str, default=None, choices=["auto", "agy", "codex", "claude", "opencode", "openai", "anthropic", "ollama"], help="CLI or HTTP backend; otherwise use saved setup")
+    parser.add_argument("--effort", default=None, help="Worker reasoning effort (default low); OpenCode provider variant or none")
+    parser.add_argument("--worker-timeout", type=float, default=180, help="Timeout per CLI call in seconds")
+    parser.add_argument("--concurrency", type=int, default=4, help="Maximum concurrent workers")
+    parser.add_argument("--progress", choices=["terminal", "jsonl"], default="terminal",
+                        help="Rich terminal display or flushed JSONL progress events for a hosting harness")
     parser.add_argument("--model", "-m", type=str, default=None, help="Modell för mikromodeller (standard: anpassas efter backend)")
     parser.add_argument("--skip-web", action="store_true", help="Hoppa över extern omvärldsspaning")
     parser.add_argument("--depth", type=int, default=2, help="Maximalt rekursionsdjup för dekomposition")
@@ -349,18 +465,57 @@ def main():
     parser.add_argument("--no-jev", action="store_true", help="Inaktivera JEV-optimering")
 
     args = parser.parse_args()
+    if args.config_status or args.configure:
+        if args.goal or args.goal_file or args.check:
+            parser.error("Setup commands cannot be combined with an objective or --check")
+        try:
+            if args.configure:
+                if not args.backend or args.backend == "auto":
+                    parser.error("--configure requires an explicit --backend")
+                configure(args.backend, args.model, args.effort)
+            print(json.dumps(config_status(args.host, host_model=args.host_model), ensure_ascii=False, indent=2))
+            return
+        except (OSError, ValueError) as exc:
+            parser.exit(1, f"Mimir configuration failed: {exc}\n")
+    if args.concurrency < 1:
+        parser.error("--concurrency must be positive")
+    if args.check:
+        try:
+            backend, model, effort = resolve_execution(args.backend, args.model, args.effort)
+            swarm = create_swarm_backend(backend, model, args.concurrency, effort, args.worker_timeout)
+            if not hasattr(swarm, "help_command"):
+                parser.error("--check validates CLI backends only")
+            print(json.dumps(asyncio.run(swarm.check_cli()), ensure_ascii=False, indent=2))
+            return
+        except (OSError, ValueError, RuntimeError, asyncio.TimeoutError) as exc:
+            parser.exit(1, f"Preflight failed: {exc}\n")
+    if args.goal and args.goal_file:
+        parser.error("Use a positional goal or --goal-file, not both")
+    try:
+        goal = Path(args.goal_file).read_text(encoding="utf-8-sig") if args.goal_file else args.goal
+    except (OSError, UnicodeError) as exc:
+        parser.error(f"Cannot read objective file: {exc}")
+    if not goal or not goal.strip():
+        parser.error("Provide a goal or --goal-file")
     source_list = [s.strip() for s in args.sources.split(",")] if args.sources else None
 
-    asyncio.run(run_mimir(
-        goal=args.goal,
-        output_path=args.output,
-        backend=args.backend,
-        model=args.model,
-        skip_web=args.skip_web,
-        max_depth=args.depth,
-        sources=source_list,
-        enable_jev=not args.no_jev,
-    ))
+    try:
+        asyncio.run(run_mimir(
+            goal=goal,
+            output_path=args.output,
+            backend=args.backend,
+            model=args.model,
+            skip_web=args.skip_web,
+            max_depth=args.depth,
+            sources=source_list,
+            enable_jev=not args.no_jev,
+            effort=args.effort,
+            worker_timeout=args.worker_timeout,
+            max_concurrency=args.concurrency,
+            progress_format=args.progress,
+        ))
+    except (OSError, ValueError, RuntimeError, asyncio.TimeoutError) as exc:
+        parser.exit(1, f"Mimir failed: {exc}\n")
 
 
 if __name__ == "__main__":

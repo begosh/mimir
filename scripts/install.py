@@ -46,6 +46,7 @@ def get_global_targets() -> List[Tuple[str, Path]]:
     # 4. Anthropic Claude Code
     claude_skills = home / ".claude" / "skills" / SKILL_NAME
     targets.append(("Claude Code", claude_skills))
+    targets.append(("OpenCode", Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config"))) / "opencode" / "skills" / SKILL_NAME))
 
     return targets
 
@@ -54,6 +55,9 @@ def get_project_targets(project_dir: Path) -> List[Tuple[str, Path]]:
     targets = [
         ("Project Agent Skills (.agents/skills)", project_dir / ".agents" / "skills" / SKILL_NAME),
         ("Project Codex Skills (.codex/skills)", project_dir / ".codex" / "skills" / SKILL_NAME),
+        ("Project Claude Skills (.claude/skills)", project_dir / ".claude" / "skills" / SKILL_NAME),
+        ("Project Antigravity Skills (.gemini/config/skills)", project_dir / ".gemini" / "config" / "skills" / SKILL_NAME),
+        ("Project OpenCode Skills (.opencode/skills)", project_dir / ".opencode" / "skills" / SKILL_NAME),
     ]
     return targets
 
@@ -118,7 +122,7 @@ def main():
         dest="is_global",
         action="store_true",
         default=True,
-        help="Install globally for all detected AI agents (Codex, Antigravity, Claude, etc.) (Default)",
+        help="Install globally to all supported skill directories (Default)",
     )
     group.add_argument(
         "--project",
@@ -131,7 +135,7 @@ def main():
     parser.add_argument(
         "--target",
         "-t",
-        choices=["all", "codex", "antigravity", "claude", "agents"],
+        choices=["all", "codex", "antigravity", "claude", "opencode", "agents"],
         default="all",
         help="Target specific agent platform (default: all)",
     )
@@ -167,10 +171,10 @@ def main():
         all_proj_targets = get_project_targets(proj_path)
         if args.target == "codex":
             target_entries = [t for t in all_proj_targets if "codex" in t[0].lower()]
-        elif args.target in ("agents", "all"):
+        elif args.target == "all":
             target_entries = all_proj_targets
         else:
-            target_entries = all_proj_targets
+            target_entries = [t for t in all_proj_targets if args.target in t[0].lower()]
     else:
         print("[>] Target Mode: Global AI Agent Ecosystem")
         all_global_targets = get_global_targets()
@@ -184,6 +188,8 @@ def main():
             target_entries = [t for t in all_global_targets if "claude" in t[0].lower()]
         elif args.target == "agents":
             target_entries = [t for t in all_global_targets if "skills.sh" in t[0].lower()]
+        elif args.target == "opencode":
+            target_entries = [t for t in all_global_targets if "opencode" in t[0].lower()]
 
     installed_count = 0
     for name, dest in target_entries:

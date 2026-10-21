@@ -307,8 +307,10 @@ class RecursiveDecomposer:
         res = await self.swarm.spawn(
             prompt=decomp_prompt,
             role="Mimir-Decomposer",
-            effort="low",
+            effort=None,
         )
+        if res.status != "SUCCESS":
+            raise RuntimeError(f"Mimir decomposition failed: {res.raw_response[:300]}")
 
         tasks_data = []
         if isinstance(res.data, dict) and "tasks" in res.data:
@@ -353,7 +355,9 @@ class RecursiveDecomposer:
                 id=t.get("id", f"t{len(graph.nodes)+1}"),
                 role=t.get("role", "Micro-Worker"),
                 title=t.get("title", "Deluppgift"),
-                prompt=t.get("objective", t.get("prompt", "")),
+                prompt=(f"MIMIR OBJECTIVE AND CONSTRAINTS:\n{goal}\n\n"
+                        f"RESEARCH CONTEXT:\n{intelligence_context[:1500]}\n\n"
+                        f"YOUR TASK:\n{t.get('objective', t.get('prompt', ''))}"),
                 dependencies=set(t.get("dependencies", [])),
                 depth=0,
                 max_depth=self.max_depth,

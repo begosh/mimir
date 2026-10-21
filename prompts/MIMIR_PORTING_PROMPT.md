@@ -64,10 +64,36 @@ Spawns headless `codex` subprocesses:
 
 ### Option B: Antigravity CLI (`agy`)
 Spawns headless `agy` subprocesses:
-- `agy --model <model> -p "<prompt>"`
+- `agy --model <model> --effort low --output-format json --sandbox --disable-slash-commands -p "<prompt>"`
 - Zero external API keys needed; inherits local AGY credentials.
+- Each worker uses disposable home/XDG/temp storage containing selected login
+  files. Do not copy user conversations or rely on print mode being ephemeral.
 
-### Option C: Direct API (OpenAI / Anthropic / Ollama)
+### Option C: Claude Code (`claude --print`)
+- `claude --print --no-session-persistence --output-format json --model haiku`
+- Reuses the CLI login; defaults to economical Haiku, which has no adjustable
+  effort. Restrict workers to read/search tools and do not load inherited MCP.
+
+### Option D: OpenCode (`opencode run`)
+- `opencode run --format json --model <provider/model> --variant <supported-low-cost-variant>`
+- Use per-worker disposable XDG/home/temp storage; reuse only supported login
+  material. Never copy a session database, attach to the host, resume, or share.
+- Omit variant only for models without variants. DB-only authentication requires
+  a future adapter extension and must fail clearly rather than copy sessions.
+
+See [HARNESS_EXECUTION.md](HARNESS_EXECUTION.md) for verified controls and limits.
+CLI workers preserve the five-phase engine and blackboard; native sub-agents
+are not an automatic substitute. On first project use, the skill suggests the
+known host's CLI login or offers available CLI/HTTP choices, asks for agreement,
+and saves backend/model/effort through `mimir_config.py` in `.mimir/config.json`.
+For Codex, propose the known host model at low worker effort and name both
+host and worker settings. Existing explicit user choices count as agreement.
+Reuse the saved profile across hosts; ask again when the choice is unclear or
+unavailable, and never silently fall back to HTTP. Supply conversation
+constraints in a self-contained objective and preflight the selected settings.
+Relay real engine JSONL activity when the host supports polling.
+
+### Option E: Direct API (OpenAI / Anthropic / Ollama)
 Standard async HTTP caller using Python standard library (`urllib.request` or `httpx`):
 - **OpenAI / Ollama:** Send POST to `https://api.openai.com/v1/chat/completions` (or `http://localhost:11434/v1/chat/completions`) with low temperature (0.1–0.2) and `response_format: {"type": "json_object"}`.
 - **Anthropic Claude:** Send POST to `https://api.anthropic.com/v1/messages` with `claude-3-5-haiku-20241022` or `claude-3-7-sonnet-20250219`.
@@ -77,13 +103,14 @@ Standard async HTTP caller using Python standard library (`urllib.request` or `h
 ## REQUIRED CODE COMPONENTS TO REPRODUCE
 
 When implementing in Python, ensure the following modules are present:
-1. `backend.py`: Base class `BaseSwarmBackend`, `SwarmTask`, `SwarmResult`, and concrete implementations (`CodexSwarmBackend`, `AgySwarmBackend`, `OpenAISwarmBackend`, `AnthropicSwarmBackend`).
+1. `backend.py`: Base class `BaseSwarmBackend`, `SwarmTask`, `SwarmResult`, and concrete implementations (`CodexSwarmBackend`, `AgySwarmBackend`, `ClaudeCodeSwarmBackend`, `OpenCodeSwarmBackend`, `OpenAISwarmBackend`, `AnthropicSwarmBackend`).
 2. `task_graph.py`: `TaskNode`, `TaskGraph` (with Kahn's topological sort), `Blackboard`, and `EvidenceContract` with SHA256 hashing.
 3. `jev_gate.py`: `JevDecisionGate` for fast System-1 scoring and DAG pruning.
 4. `research_scout.py`: `ResearchScout` with arXiv API query and DuckDuckGo search.
 5. `gepa_optimizer.py`: `GepaOptimizer` for reflective Pareto evolution against Red-Team critique.
 6. `jarvis_memory.py` / `mimir_memory.py`: Cumulative memory reader and appender targeting `LEARNINGS.md`.
 7. `mimir.py`: Main entrypoint with CLI argument parsing and rich console HUD.
+8. `mimir_config.py`: Project setup, credential-free preferences and explicit/environment/saved resolution.
 
 ## INSTRUCTIONS FOR THE AI ASSISTANT
 

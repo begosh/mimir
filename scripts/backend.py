@@ -4,20 +4,22 @@ Universal Multi-Backend Swarm Engine for M Í M I R.
 Abstracts LLM execution across:
 - Antigravity CLI (agy.exe) - Zero API keys, local authenticated session
 - OpenAI Codex CLI (codex.exe) - Zero API keys, local authenticated session
+- Claude Code CLI (claude) - Login reuse, native non-persistence
+- OpenCode CLI (opencode) - Supported login reuse, disposable XDG storage
 - OpenAI API & Compatible endpoints (Ollama, LMStudio, vLLM, OpenRouter)
 - Anthropic Claude API (Claude 3.5 Haiku, Claude 3.7 Sonnet)
-- Generic CLI wrappers
 """
 
 from __future__ import annotations
 
 import asyncio
-import atexit
 import json
 import os
 import re
 import shutil
+import signal
 import tempfile
+from contextlib import contextmanager
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
@@ -31,7 +33,7 @@ class SwarmTask:
     role: str
     prompt: str
     model: Optional[str] = None
-    effort: str = "low"  # low | medium | high
+    effort: Optional[str] = None  # inherit the run's worker effort
     json_schema: Optional[Dict[str, Any]] = None
     input_data: Optional[Any] = None
 
@@ -50,7 +52,11 @@ class BaseSwarmBackend(ABC):
     """Abstract base class for all Mímir LLM backends."""
 
     def __init__(self, default_model: str, max_concurrency: int = 4):
+        if max_concurrency < 1:
+            raise ValueError("Worker concurrency must be positive.")
         self.default_model = default_model
+        self.default_effort = "low"
+        self.timeout_seconds = 180
         self.semaphore = asyncio.Semaphore(max_concurrency)
 
     @abstractmethod
@@ -90,6 +96,55 @@ class BaseSwarmBackend(ABC):
             for t in tasks
         ]
         return await asyncio.gather(*coroutines)
+
+    async def _run_cli(self, cmd: List[str], prompt: Optional[str] = None,
+                       env: Optional[Dict[str, str]] = None) -> tuple[int, str, str]:
+        """Bound each CLI call and reap it before releasing disposable storage."""
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdin=asyncio.subprocess.PIPE if prompt is not None else asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env,
+            start_new_session=os.name != "nt",
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(prompt.encode("utf-8") if prompt is not None else None),
+                timeout=getattr(self, "timeout_seconds", 180),
+            )
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            if proc.returncode is None:
+                if os.name == "nt" and getattr(proc, "pid", None):
+                    killer = await asyncio.create_subprocess_exec(
+                        "taskkill", "/PID", str(proc.pid), "/T", "/F",
+                        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+                    )
+                    await killer.wait()
+                elif getattr(proc, "pid", None):
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                else:
+                    proc.kill()
+            await proc.communicate()
+            raise
+        return proc.returncode, stdout.decode("utf-8", errors="replace").strip(), stderr.decode("utf-8", errors="replace").strip()
+
+    async def check_cli(self) -> Dict[str, Any]:
+        """Check flags without starting a model call or exposing credentials."""
+        code, stdout, stderr = await self._run_cli(self.help_command)
+        help_text = stdout + "\n" + stderr
+        if code or not help_text.strip():
+            raise RuntimeError(f"{self.__class__.__name__}: CLI help failed; repair the CLI installation.")
+        missing = [flag for flag in self.required_flags if flag not in help_text]
+        if missing:
+            raise RuntimeError(f"CLI version is missing required flags: {', '.join(missing)}")
+        self.cli_help = help_text
+        return {
+            "backend": self.__class__.__name__, "model": self.default_model,
+            "effort": self.default_effort, "session_policy": self.session_policy,
+            "timeout_seconds": self.timeout_seconds,
+            "model_configured": self.default_model != "default",
+        }
 
     @staticmethod
     def parse_json_from_text(raw_text: str) -> Any:
@@ -193,7 +248,7 @@ class BaseSwarmBackend(ABC):
                         role=node.role,
                         prompt=node_prompt,
                         model=getattr(node, "model", None) or self.default_model,
-                        effort="low",
+                        effort=None,
                     )
                 )
                 tier_nodes.append(node)
@@ -246,10 +301,50 @@ class BaseSwarmBackend(ABC):
         return completed_data
 
 
+@contextmanager
+def disposable_cli_env(kind: str):
+    """Keep CLI histories away from the user's home; copy only login material."""
+    original_home = Path.home()
+    with tempfile.TemporaryDirectory(prefix=f"mimir_{kind}_") as directory:
+        root = Path(directory)
+        env = os.environ.copy()
+        env.update(HOME=str(root), USERPROFILE=str(root), TMP=str(root), TEMP=str(root), TMPDIR=str(root))
+        for key, folder in (("XDG_DATA_HOME", "data"), ("XDG_STATE_HOME", "state"),
+                            ("XDG_CACHE_HOME", "cache"), ("XDG_CONFIG_HOME", "config")):
+            env[key] = str(root / folder)
+            (root / folder).mkdir()
+        if kind == "agy":
+            destination = root / ".gemini"
+            destination.mkdir()
+            for name in ("oauth_creds.json", "google_accounts.json", "installation_id"):
+                source = original_home / ".gemini" / name
+                if source.exists():
+                    shutil.copy2(source, destination / name)
+            # Do not recursively expand this skill inside a micro-worker.
+        elif kind == "opencode":
+            source_data = Path(os.environ.get("XDG_DATA_HOME", str(original_home / ".local" / "share"))) / "opencode"
+            destination = root / "data" / "opencode"
+            destination.mkdir(parents=True)
+            auth = source_data / "auth.json"
+            if auth.exists():
+                shutil.copy2(auth, destination / "auth.json")
+            # Newer releases can store credentials in their DB. Do not copy that
+            # DB: it also contains the user's conversations.
+            env.pop("OPENCODE_CONFIG", None)
+            env.pop("OPENCODE_CONFIG_CONTENT", None)
+            env["OPENCODE_CONFIG_DIR"] = str(root / "config" / "opencode")
+            env["OPENCODE_DISABLE_AUTOUPDATE"] = "1"
+            env["OPENCODE_CONFIG_CONTENT"] = json.dumps({
+                "share": "disabled", "autoupdate": False,
+                "permission": {"*": "deny", "read": "allow", "glob": "allow", "grep": "allow", "webfetch": "allow"},
+            })
+        yield env
+
+
 class AgySwarmBackend(BaseSwarmBackend):
     """
     Spawns headless agy.exe processes using the user's existing
-    authenticated AGY CLI session. Zero API keys or extra billing required.
+    authenticated AGY CLI session. Uses the account's existing usage allowance.
     """
 
     def __init__(
@@ -262,9 +357,8 @@ class AgySwarmBackend(BaseSwarmBackend):
     ):
         super().__init__(default_model=default_model, max_concurrency=max_concurrency)
         self.default_effort = default_effort
-        self.isolate_sessions = isolate_sessions
-        self._temp_home: Optional[str] = None
-        self._isolated_env: Optional[Dict[str, str]] = None
+        if not isolate_sessions:
+            raise ValueError("Mimir AGY workers require disposable session storage.")
 
         resolved_path = agy_path or shutil.which("agy")
         if not resolved_path:
@@ -286,49 +380,10 @@ class AgySwarmBackend(BaseSwarmBackend):
                 "Ensure Antigravity CLI is installed or configure an alternative backend."
             )
         self.agy_path = resolved_path
-
-    def _ensure_isolated_env(self) -> Dict[str, str]:
-        if self._isolated_env is not None:
-            return self._isolated_env
-
-        temp_dir = tempfile.mkdtemp(prefix="agy_swarm_isolated_")
-        self._temp_home = temp_dir
-
-        temp_gemini = Path(temp_dir) / ".gemini"
-        temp_gemini.mkdir(parents=True, exist_ok=True)
-        real_gemini = Path(os.environ.get("USERPROFILE", str(Path.home()))) / ".gemini"
-
-        for auth_file in ["oauth_creds.json", "google_accounts.json", "installation_id"]:
-            src = real_gemini / auth_file
-            if src.exists():
-                try:
-                    shutil.copy2(src, temp_gemini / auth_file)
-                except Exception:
-                    pass
-
-        env = os.environ.copy()
-        env["USERPROFILE"] = temp_dir
-        env["HOME"] = temp_dir
-        self._isolated_env = env
-
-        def _cleanup_handler():
-            if self._temp_home and os.path.exists(self._temp_home):
-                try:
-                    shutil.rmtree(self._temp_home, ignore_errors=True)
-                except Exception:
-                    pass
-
-        atexit.register(_cleanup_handler)
-        return self._isolated_env
-
-    def cleanup(self) -> None:
-        if self._temp_home and os.path.exists(self._temp_home):
-            try:
-                shutil.rmtree(self._temp_home, ignore_errors=True)
-            except Exception:
-                pass
-            self._temp_home = None
-            self._isolated_env = None
+        self.timeout_seconds = 180
+        self.help_command = [self.agy_path, "--help"]
+        self.required_flags = ("--model", "--effort", "--output-format", "--sandbox", "--disable-slash-commands")
+        self.session_policy = "disposable home per call (temporary session files removed)"
 
     async def spawn(
         self,
@@ -350,7 +405,8 @@ class AgySwarmBackend(BaseSwarmBackend):
 
             system_instruction = (
                 f"Du är en högspecialiserad mikro-agent med rollen: '{role}'. "
-                f"Lös uppgiften koncist, sakligt och strukturerat. Svara direkt utan onödig hälsningsfras."
+                f"Lös uppgiften koncist, sakligt och strukturerat. Svara direkt utan onödig hälsningsfras. "
+                f"Starta inte Mimir igen och delegera inte vidare."
             )
 
             cmd = [
@@ -361,6 +417,8 @@ class AgySwarmBackend(BaseSwarmBackend):
                 target_effort,
                 "--output-format",
                 "json",
+                "--sandbox",
+                "--disable-slash-commands",
             ]
 
             if json_schema:
@@ -368,22 +426,15 @@ class AgySwarmBackend(BaseSwarmBackend):
 
             cmd.extend(["-p", f"{system_instruction}\n\n{full_prompt}"])
 
-            start_time = asyncio.get_event_loop().time()
-            sub_env = self._ensure_isolated_env() if self.isolate_sessions else None
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=sub_env,
-            )
+            start_time = asyncio.get_running_loop().time()
+            try:
+                with disposable_cli_env("agy") as sub_env:
+                    code, raw_out, raw_err = await self._run_cli(cmd, env=sub_env)
+            except (OSError, asyncio.TimeoutError) as exc:
+                return SwarmResult(role, "ERROR", None, str(exc) or "Worker timed out")
+            duration = asyncio.get_running_loop().time() - start_time
 
-            stdout, stderr = await proc.communicate()
-            duration = asyncio.get_event_loop().time() - start_time
-
-            raw_out = stdout.decode("utf-8", errors="replace").strip()
-            raw_err = stderr.decode("utf-8", errors="replace").strip()
-
-            if proc.returncode != 0:
+            if code != 0 or not raw_out:
                 return SwarmResult(
                     role=role,
                     status="ERROR",
@@ -392,6 +443,12 @@ class AgySwarmBackend(BaseSwarmBackend):
                     duration_seconds=duration,
                 )
 
+            try:
+                wrapper = json.loads(raw_out)
+            except ValueError:
+                return SwarmResult(role, "ERROR", None, "AGY returned malformed JSON")
+            if isinstance(wrapper, dict) and (wrapper.get("is_error") or wrapper.get("error")):
+                return SwarmResult(role, "ERROR", None, "AGY reported a worker error")
             parsed_data = self._parse_agy_output(raw_out)
             tokens = 0
             try:
@@ -433,7 +490,7 @@ class AgySwarmBackend(BaseSwarmBackend):
 class CodexSwarmBackend(BaseSwarmBackend):
     """
     Spawns headless codex.exe processes using the user's existing
-    authenticated Codex CLI session. Zero API keys or extra billing required.
+    authenticated Codex CLI session. Uses the account's existing usage allowance.
     """
 
     def __init__(
@@ -482,6 +539,15 @@ class CodexSwarmBackend(BaseSwarmBackend):
                 "Ensure OpenAI Codex CLI is installed or configure an alternative backend."
             )
         self.codex_path = resolved_path
+        self.timeout_seconds = 180
+        self.help_command = [self.codex_path, "exec", "--help"]
+        self.required_flags = ("--ephemeral", "--output-schema", "--sandbox")
+        self.session_policy = "native --ephemeral (no session rollout persistence)"
+
+    async def check_cli(self) -> Dict[str, Any]:
+        if self.default_model == "default":
+            raise ValueError("Set an economical Codex worker model via --model or MIMIR_CODEX_MODEL.")
+        return await super().check_cli()
 
     async def spawn(
         self,
@@ -507,7 +573,8 @@ class CodexSwarmBackend(BaseSwarmBackend):
 
             system_instruction = (
                 f"You are a specialized micro-worker agent with role: '{role}'. "
-                f"Solve the task objectively, concisely, and rigorously. Answer directly without preamble."
+                f"Solve the task objectively, concisely, and rigorously. Answer directly without preamble. "
+                f"Do not launch Mimir or delegate this task."
             )
 
             with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f_out:
@@ -538,21 +605,14 @@ class CodexSwarmBackend(BaseSwarmBackend):
                 if schema_file:
                     cmd.extend(["--output-schema", schema_file])
 
-                cmd.append(f"{system_instruction}\n\n{full_prompt}")
+                cmd.append("-")
 
                 start_time = asyncio.get_event_loop().time()
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdin=asyncio.subprocess.DEVNULL,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-
-                stdout, stderr = await proc.communicate()
+                try:
+                    code, raw_out, raw_err = await self._run_cli(cmd, prompt=f"{system_instruction}\n\n{full_prompt}")
+                except (OSError, asyncio.TimeoutError) as exc:
+                    return SwarmResult(role, "ERROR", None, str(exc) or "Worker timed out")
                 duration = asyncio.get_event_loop().time() - start_time
-
-                raw_out = stdout.decode("utf-8", errors="replace").strip()
-                raw_err = stderr.decode("utf-8", errors="replace").strip()
 
                 content = ""
                 if os.path.exists(out_file):
@@ -565,7 +625,7 @@ class CodexSwarmBackend(BaseSwarmBackend):
                 if not content:
                     content = raw_out
 
-                if proc.returncode != 0 and not content:
+                if code != 0 or not content:
                     return SwarmResult(
                         role=role,
                         status="ERROR",
@@ -604,6 +664,133 @@ class CodexSwarmBackend(BaseSwarmBackend):
                         os.remove(schema_file)
                     except Exception:
                         pass
+
+
+class ClaudeCodeSwarmBackend(BaseSwarmBackend):
+    """Authenticated Claude Code print calls, without resumable sessions."""
+
+    def __init__(self, default_model: str = "haiku", default_effort: str = "low",
+                 claude_path: Optional[str] = None, max_concurrency: int = 4):
+        super().__init__(default_model, max_concurrency)
+        self.claude_path = claude_path or shutil.which("claude")
+        if not self.claude_path:
+            raise FileNotFoundError("Could not find Claude Code ('claude') in PATH.")
+        self.default_effort = default_effort
+        self.timeout_seconds = 180
+        self.help_command = [self.claude_path, "--help"]
+        self.required_flags = ("--no-session-persistence", "--model", "--output-format", "--tools", "--strict-mcp-config", "--permission-mode", "--disable-slash-commands")
+        self.session_policy = "native --no-session-persistence"
+        self.cli_help = ""
+
+    async def spawn(self, prompt: str, role: str = "Micro-Worker", model: Optional[str] = None,
+                    effort: Optional[str] = None, json_schema: Optional[Dict[str, Any]] = None,
+                    input_data: Optional[Any] = None) -> SwarmResult:
+        async with self.semaphore:
+            selected_model = model or self.default_model
+            selected_effort = effort or self.default_effort
+            cmd = [self.claude_path, "--print", "--no-session-persistence", "--output-format", "json",
+                   "--model", selected_model, "--disable-slash-commands", "--strict-mcp-config",
+                   "--tools", "Read,Glob,Grep,WebFetch,WebSearch", "--permission-mode", "dontAsk"]
+            # Haiku does not expose adjustable reasoning effort. Older Claude
+            # releases also lack the effort flag: never invent a flag or upgrade
+            # the model merely to get effort controls.
+            if "haiku" not in selected_model.lower():
+                if "--effort" not in self.cli_help:
+                    return SwarmResult(role, "ERROR", None, "This Claude CLI has no --effort control; use haiku or update it.")
+                cmd.extend(["--effort", selected_effort])
+            if json_schema:
+                cmd.extend(["--json-schema", json.dumps(json_schema)])
+            full_prompt = f"You are a Mimir micro-worker ({role}). Solve only this task. Do not launch Mimir or delegate.\n\n{prompt}"
+            if input_data is not None:
+                full_prompt += "\n\nINPUT DATA:\n" + json.dumps(input_data, ensure_ascii=False)
+            start = asyncio.get_running_loop().time()
+            try:
+                code, stdout, stderr = await self._run_cli(cmd, prompt=full_prompt)
+                wrapper = json.loads(stdout) if stdout else {}
+                if code or not isinstance(wrapper, dict) or wrapper.get("is_error") or wrapper.get("subtype", "success") != "success":
+                    return SwarmResult(role, "ERROR", None, stderr or stdout or "Empty Claude response")
+                content = wrapper.get("structured_output", wrapper.get("result"))
+                if content is None or content == "":
+                    return SwarmResult(role, "ERROR", None, "Claude returned no result")
+                raw = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+                usage = wrapper.get("usage", {})
+                return SwarmResult(role, "SUCCESS", self.parse_json_from_text(raw), raw,
+                                   asyncio.get_running_loop().time() - start,
+                                   usage.get("input_tokens", 0) + usage.get("output_tokens", 0))
+            except (OSError, ValueError, asyncio.TimeoutError) as exc:
+                return SwarmResult(role, "ERROR", None, str(exc) or "Worker timed out")
+
+    async def check_cli(self) -> Dict[str, Any]:
+        info = await super().check_cli()
+        if "haiku" in self.default_model.lower():
+            info["effort"] = "not adjustable for Haiku; economical model selected"
+        elif "--effort" not in self.cli_help:
+            raise RuntimeError("This Claude CLI cannot set effort for this model; use haiku or update the CLI.")
+        return info
+
+
+class OpenCodeSwarmBackend(BaseSwarmBackend):
+    """OpenCode JSON events with per-call disposable XDG storage.
+
+    Supports reusable auth.json logins. DB-only credentials cannot be copied
+    without bringing session history, so that storage format fails preflight.
+    """
+
+    def __init__(self, default_model: Optional[str] = None, default_effort: str = "low",
+                 opencode_path: Optional[str] = None, max_concurrency: int = 4):
+        if not default_model or "/" not in default_model:
+            raise ValueError("OpenCode requires an explicit economical provider/model via --model or MIMIR_OPENCODE_MODEL.")
+        super().__init__(default_model, max_concurrency)
+        self.opencode_path = opencode_path or shutil.which("opencode")
+        if not self.opencode_path:
+            raise FileNotFoundError("Could not find 'opencode' in PATH.")
+        self.default_effort = default_effort
+        self.timeout_seconds = 180
+        self.help_command = [self.opencode_path, "run", "--help"]
+        self.required_flags = ("--model", "--format", "--variant")
+        self.session_policy = "disposable XDG/home storage per call; no attach/resume/share"
+
+    async def check_cli(self) -> Dict[str, Any]:
+        info = await super().check_cli()
+        auth = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local" / "share"))) / "opencode" / "auth.json"
+        if not auth.exists():
+            raise RuntimeError("OpenCode needs reusable auth.json login storage; DB-only credentials are not yet supported without copying sessions.")
+        info["effort"] = f"provider variant: {self.default_effort} (use 'none' for models without variants)"
+        return info
+
+    async def spawn(self, prompt: str, role: str = "Micro-Worker", model: Optional[str] = None,
+                    effort: Optional[str] = None, json_schema: Optional[Dict[str, Any]] = None,
+                    input_data: Optional[Any] = None) -> SwarmResult:
+        async with self.semaphore:
+            selected_effort = effort or self.default_effort
+            cmd = [self.opencode_path, "run", "--format", "json", "--model", model or self.default_model]
+            if selected_effort != "none":
+                cmd.extend(["--variant", selected_effort])
+            full_prompt = f"You are a Mimir micro-worker ({role}). Solve only this task. Do not launch Mimir or delegate.\n\n{prompt}"
+            if input_data is not None:
+                full_prompt += "\n\nINPUT DATA:\n" + json.dumps(input_data, ensure_ascii=False)
+            if json_schema:
+                full_prompt += "\nReturn JSON matching this schema:\n" + json.dumps(json_schema)
+            start = asyncio.get_running_loop().time()
+            try:
+                with disposable_cli_env("opencode") as env:
+                    code, stdout, stderr = await self._run_cli(cmd, prompt=full_prompt, env=env)
+                events = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+                errors = [event for event in events if event.get("type") == "error"]
+                if code or errors:
+                    return SwarmResult(role, "ERROR", None, stderr or json.dumps(errors) or stdout)
+                raw = "\n".join(event.get("part", {}).get("text", "") for event in events if event.get("type") == "text").strip()
+                if not raw:
+                    return SwarmResult(role, "ERROR", None, "OpenCode returned no text result")
+                tokens = 0
+                for event in events:
+                    if event.get("type") == "step_finish":
+                        usage = event.get("part", {}).get("tokens", {})
+                        tokens += usage.get("input", 0) + usage.get("output", 0)
+                return SwarmResult(role, "SUCCESS", self.parse_json_from_text(raw), raw,
+                                   asyncio.get_running_loop().time() - start, tokens)
+            except (OSError, ValueError, asyncio.TimeoutError) as exc:
+                return SwarmResult(role, "ERROR", None, str(exc) or "Worker timed out")
 
 
 class OpenAISwarmBackend(BaseSwarmBackend):
@@ -808,45 +995,49 @@ def create_swarm_backend(
     backend_type: Optional[str] = None,
     model: Optional[str] = None,
     max_concurrency: int = 4,
+    effort: Optional[str] = None,
+    timeout_seconds: float = 180,
 ) -> BaseSwarmBackend:
     """
     Factory function for instantiating the optimal swarm backend.
     Auto-detects based on environment if backend_type is None or 'auto'.
     """
-    chosen = (backend_type or os.environ.get("MIMIR_BACKEND", "auto")).lower()
+    chosen = (backend_type or "auto").lower()
+    if chosen == "auto":
+        chosen = os.environ.get("MIMIR_BACKEND", "auto").lower()
+    chosen = {"antigravity": "agy", "openai-codex": "codex", "claude-code": "claude"}.get(chosen, chosen)
+    selected_effort = effort or os.environ.get("MIMIR_EFFORT", "low")
+    if timeout_seconds <= 0:
+        raise ValueError("Worker timeout must be positive.")
+    if chosen in ("agy", "codex", "claude") and selected_effort not in ("low", "medium", "high", "xhigh", "max"):
+        raise ValueError("CLI effort must be low, medium, high, xhigh, or max. OpenCode accepts provider variants or none.")
 
     if chosen == "auto":
-        # 1. Prefer agy if binary is present
-        if shutil.which("agy") or Path(os.environ.get("LOCALAPPDATA", "")) / "agy" / "bin" / "agy.exe":
+        # Preserve CLI discovery order. Skill invocation supplies --backend
+        # explicitly; discovery never falls through into separately billed HTTP.
+        for candidate in ("agy", "codex", "claude", "opencode"):
             try:
-                return AgySwarmBackend(default_model=model or "gemini-3.8-flash-low", max_concurrency=max_concurrency)
-            except Exception:
-                pass
+                return create_swarm_backend(candidate, model, max_concurrency, selected_effort, timeout_seconds)
+            except FileNotFoundError:
+                continue
+        raise FileNotFoundError("No supported CLI found. Install/login to a CLI or explicitly select an HTTP backend.")
 
-        # 2. Check Codex CLI if installed (zero API keys, local authenticated session)
-        try:
-            return CodexSwarmBackend(default_model=model, max_concurrency=max_concurrency)
-        except Exception:
-            pass
-
-        # 3. Check OpenAI API Key
-        if os.environ.get("OPENAI_API_KEY"):
-            return OpenAISwarmBackend(default_model=model or "gpt-4o-mini", max_concurrency=max_concurrency)
-
-        # 4. Check Anthropic API Key
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            return AnthropicSwarmBackend(default_model=model or "claude-3-5-haiku-20241022", max_concurrency=max_concurrency)
-
-        # Fallback to agy attempt
-        chosen = "agy"
+    selected_model = model or os.environ.get(f"MIMIR_{chosen.upper()}_MODEL") or os.environ.get("MIMIR_MODEL")
 
     if chosen in ("agy", "antigravity"):
-        return AgySwarmBackend(default_model=model or "gemini-3.8-flash-low", max_concurrency=max_concurrency)
+        result = AgySwarmBackend(default_model=selected_model or "gemini-3.8-flash-low", default_effort=selected_effort, max_concurrency=max_concurrency)
     elif chosen in ("codex", "openai-codex"):
-        return CodexSwarmBackend(default_model=model, max_concurrency=max_concurrency)
+        result = CodexSwarmBackend(default_model=selected_model, default_effort=selected_effort, max_concurrency=max_concurrency)
+    elif chosen == "claude":
+        result = ClaudeCodeSwarmBackend(default_model=selected_model or "haiku", default_effort=selected_effort, max_concurrency=max_concurrency)
+    elif chosen == "opencode":
+        result = OpenCodeSwarmBackend(default_model=selected_model, default_effort=selected_effort, max_concurrency=max_concurrency)
     elif chosen in ("openai", "ollama", "vllm", "openrouter"):
-        return OpenAISwarmBackend(default_model=model or "gpt-4o-mini", max_concurrency=max_concurrency)
-    elif chosen in ("anthropic", "claude"):
-        return AnthropicSwarmBackend(default_model=model or "claude-3-5-haiku-20241022", max_concurrency=max_concurrency)
+        result = OpenAISwarmBackend(default_model=selected_model or "gpt-4o-mini", max_concurrency=max_concurrency)
+    elif chosen == "anthropic":
+        result = AnthropicSwarmBackend(default_model=selected_model or "claude-3-5-haiku-20241022", max_concurrency=max_concurrency)
     else:
-        raise ValueError(f"Unknown Mímir backend: '{chosen}'. Supported: 'agy', 'codex', 'openai', 'anthropic', 'auto'.")
+        raise ValueError(f"Unknown Mímir backend: '{chosen}'. Supported: agy, codex, claude, opencode, openai, anthropic, ollama, auto.")
+    result.default_effort = selected_effort
+    result.timeout_seconds = timeout_seconds
+    return result

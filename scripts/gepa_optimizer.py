@@ -116,7 +116,7 @@ class GepaOptimizer:
                         role=f"GEPA-Critic-{cand.id}",
                         prompt=prompt,
                         model=self.critic_model,
-                        effort="low",
+                        effort=None,
                     )
                 )
 
@@ -174,8 +174,10 @@ class GepaOptimizer:
             prompt=prompt,
             role="GEPA-Evolver",
             model=self.critic_model,
-            effort="low",
+            effort=None,
         )
+        if res.status != "SUCCESS":
+            raise RuntimeError(f"Mimir reflection failed: {res.raw_response[:300]}")
 
         if isinstance(res.data, dict) and "hardened_solution" in res.data:
             return res.data["hardened_solution"], res.data.get("reflection", "")

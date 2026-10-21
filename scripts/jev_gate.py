@@ -65,7 +65,7 @@ class JevDecisionGate:
         res = await self.swarm.spawn(
             prompt=prompt,
             role="Jev-System1-Gate",
-            effort="low",
+            effort=None,
             json_schema=schema,
         )
 
@@ -123,7 +123,7 @@ class JevDecisionGate:
         res = await self.swarm.spawn(
             prompt=prompt,
             role="Jev-Optimizer",
-            effort="low",
+            effort=None,
             json_schema=schema,
         )
 
@@ -173,7 +173,7 @@ class JevDecisionGate:
         res = await self.swarm.spawn(
             prompt=prompt,
             role="Jev-Evidence-Screen",
-            effort="low",
+            effort=None,
             json_schema=schema,
         )
 

@@ -1,189 +1,144 @@
 ---
 name: mimir
-description: "M Í M I R // The Omniscient Oracle & Autonomous Swarm. Deep knowledge retrieval, recursive DAG reasoning, JEV decision gating, and cumulative memory across all domains (Bilingual EN/SV)."
+description: Run Mímir's evidence-led research and problem-solving swarm for complex objectives, architecture reviews, and investigations, using authenticated CLI workers and the Python DAG engine. Respond in English or Swedish to match the user.
 ---
 
 # M Í M I R // Keeper of Wisdom & Autonomous Swarm
 
-> [English](#english) | [Svenska](#svenska)
+Mímir is a five-phase research and problem-solving pipeline. The hosting assistant
+captures the objective and presents the result; the Python engine owns decomposition,
+JEV pruning, DAG scheduling, the blackboard, red-team reflection, and cumulative
+learning. A CLI backend supplies fresh worker calls using an existing login.
+Preserve that division across AGY, Codex, Claude Code, OpenCode, and other harnesses.
 
----
+## Mode A: Python swarm (default for a Mímir investigation)
 
-## English
+Before the first investigation in a project, inspect setup without invoking a
+model: `python <skill-dir>/scripts/mimir.py --config-status --host <known-host>`.
+Include `--host-model <known-model>` when the host model is available in the
+session. Omit unknown host/model values rather than guessing. The saved profile is
+`.mimir/config.json` at the nearest Git root (current directory outside Git),
+shared across installed skill copies. It contains backend, model, and effort;
+credentials remain in CLI login stores or environment variables.
 
-> *"Drink from the Well. Truth distilled from the noise of the cosmos."*  
-> *"Drick ur Mimers brunn. Sanningen är silad ur kosmos brus."*
+If no profile exists, ask an early setup question even when the host is obvious:
+"Your Codex harness uses gpt-6.1-sol at high effort. Should Mímir reuse your CLI
+login with gpt-6.1-sol at low effort for swarm workers and remember this for the
+project, or would you prefer another worker model or API backend?"
+Adapt the CLI name to the host. If unclear, present the available CLIs and the
+HTTP option. Resolve the worker model and effort before saving. An existing
+explicit choice in this conversation counts as the answer; do not ask twice.
+Do not start dependent work while that choice is pending.
 
-This skill equips your AI assistant with **M Í M I R** — the omniscient oracle swarm named after the wisest being in Norse mythology. Mímir unites ancient wisdom with modern AI engineering to autonomously deconstruct, investigate, and solve complex problems:
+After agreement, save with
+`python <skill-dir>/scripts/mimir.py --configure --backend <choice> --model <model> --effort <effort>`.
+AGY/Claude defaults may omit model. API choices use `openai`, `anthropic`, or
+`ollama`; keys/endpoints are configured outside this file. This command saves
+preferences, not proof of authentication or a successful run.
 
-1. **Omni-Channel Sensor Array ([research_scout.py](file://./scripts/research_scout.py)):** Dynamically searches authoritative venues (arXiv, GitHub, RFCs, HackerNews, or the open web) without external API keys.
-2. **Kahn-Validated Recursive RLM DAG ([task_graph.py](file://./scripts/task_graph.py)):** Decomposes targets into atomic subtasks with guaranteed topological acyclicity and deadlock elimination.
-3. **JEV System-1 Decision Gate ([jev_gate.py](file://./scripts/jev_gate.py)):** Rapid typed decision-making and mathematical branch pruning via Joint Expected Value ($JEV = P(\text{impact}) \times \text{gain} - \text{cost}$).
-4. **Anti-Hallucination via EvidenceContracts:** Grounded conclusions anchored by SHA-256 hashes against a shared **Blackboard**.
-5. **Adversarial Red-Team & GEPA ([gepa_optimizer.py](file://./scripts/gepa_optimizer.py)):** Stress-tests solutions against adversarial critiques and mutates along the Pareto frontier (robustness vs. simplicity).
-6. **Cumulative Long-Term Memory ([LEARNINGS.md](file://./LEARNINGS.md)):** Persistent knowledge repository loaded at startup and augmented with every run.
-7. **Modular Multi-Backend Support ([backend.py](file://./scripts/backend.py)):** Seamless execution across **OpenAI Codex CLI (`codex`)**, **Antigravity CLI (`agy`)**, **OpenAI API** (`gpt-4o-mini`, etc.), **Anthropic Claude API** (`claude-3-5-haiku`, `claude-3-7-sonnet`), and local **Ollama** / vLLM. No API keys needed when using `codex` or `agy`.
-8. **Bilingual Persona (EN / SV):** Operates with stoic, authoritative precision in both English and Swedish.
+On subsequent uses, reuse the profile across hosting harnesses. A user-requested
+one-run override should not rewrite it unless they ask to remember the change.
+If setup is corrupt, the host is unclear with no profile, or the selected path
+fails preflight/authentication, explain the problem and ask whether to repair it
+or choose another path. Never silently switch from a saved CLI to an API backend.
+Setup questions are explicitly part of Mímir's workflow, not repeated permission
+requests for every run.
 
----
+1. Resolve the directory containing **this loaded SKILL.md**. Its engine is
+   `scripts/mimir.py` relative to that directory. Do not guess a global path or
+   switch to another installed copy. Keep the working directory on the user's
+   project so workers can inspect relevant files.
+2. Capture a self-contained objective including the user's constraints, relevant
+   paths, and established facts. CLI workers do not inherit this conversation.
+   For multiline context, write a UTF-8 objective file and use `--goal-file`;
+   do not interpolate conversation text into a shell command.
+3. Reuse the saved backend or an explicit user/environment override: `agy`,
+   `codex`, `claude` (Claude Code), `opencode`, or a chosen HTTP backend. For
+   first setup, suggest the known host; do not silently select it. `auto` cannot
+   choose an execution path for an unconfigured investigation.
+   HTTP backends (`openai`, `anthropic`, `ollama`) require explicit selection;
+   do not switch to them because a CLI fails.
+4. Select economical settings independently of the hosting assistant:
+   - AGY: default `gemini-3.8-flash-low`, effort `low`. Check `agy models` if unavailable.
+   - Claude Code: default `haiku`. Haiku has no adjustable effort; do not upgrade
+     to an expensive model merely to obtain effort controls.
+   - Codex: when the host model is known, propose that model at `low` effort as
+     the first-use worker default, naming both host and worker settings. Offer a
+     smaller available model when cost matters. If the host model is unknown,
+     ask for an available worker model. Save the agreed explicit model; do not
+     inherit the host's model or effort silently on later runs.
+   - OpenCode: explicitly select a configured `provider/model` with `--model` or
+     `MIMIR_OPENCODE_MODEL`. Effort maps to `--variant`; choose a supported
+     economical variant, or `--effort none` for models without variants.
+   Run `python <skill-dir>/scripts/mimir.py --backend <backend> --check` with
+   the selected model/effort arguments. This checks CLI flags and settings without
+   a model call. It does not validate login, model availability, pricing, or actual
+   session persistence. Read [harness compatibility](prompts/HARNESS_EXECUTION.md)
+   for the selected backend's limits. Resolve failures before starting the swarm.
+5. Start the engine through the harness's shell tool, then poll its process/session
+   until it exits. Tool names vary; native sub-agent tools are not required.
+   Example with resolved and safely quoted paths:
 
-### 🤖 Harness Execution Guide (Codex & Antigravity)
+   ```text
+   python -u <skill-dir>/scripts/mimir.py --goal-file <objective-file> --backend <backend> --model <worker-model> --effort low --progress jsonl --output <report.md>
+   ```
 
-When the user invokes Mímir (via `$mimir`, "use mimir to analyze...", or asks for deep architectural validation), you can operate in two modes:
+   Omit backend/model/effort arguments when reusing saved setup. Default concurrency is 4 and timeout is
+   180 seconds per CLI call; override with `--concurrency` / `--worker-timeout`.
+   Use `--skip-web` only when external scouting is intentionally excluded.
+   Relay selected JSONL progress events as short commentary updates while polling:
+   phase changes, sources found, the task graph, queued/completed/failed tasks,
+   JEV pruning, and critique/reflection excerpts. Track `sequence` to avoid
+   repeating events. Group busy bursts into one update rather than printing raw
+   JSON, hashes, or every worker message. `task_submitted` means queued for execution,
+   not proof that a CLI/model call has started. During a quiet long-running call,
+   state the last known phase and that no new progress arrived; do not invent work.
+   Use recorded task results and brief rationale summaries, not private model
+   reasoning. The terminal default keeps the Rich display for direct Python runs.
+6. On success, read the Markdown report and JSON sidecar, then present synthesis,
+   sources, critique, and limitations. A hash records output identity; it does not
+   prove factual correctness. Do not call unsupported claims verified merely
+   because they carry an EvidenceContract.
+7. On failure, report the failed call/phase and missing prerequisite. Do not
+   present stale output as this run's result, claim completion, or silently
+   substitute native delegation or a conversational answer.
 
-#### Mode A: Background Swarm Execution (Autonomous Python Engine)
-Use your shell tool (`run_command` in AGY, `bash` in Codex) to run the full swarm orchestrator in the background:
-- **In Codex CLI:**
-  ```bash
-  python ~/.codex/skills/mimir/scripts/mimir.py "<USER_QUERY>" --backend codex --output artifacts/mimir_solution.md
-  ```
-- **In Antigravity CLI (AGY):**
-  ```bash
-  python ~/.gemini/config/skills/mimir/scripts/mimir.py "<USER_QUERY>" --backend agy --output artifacts/mimir_solution.md
-  ```
-- **In Project-Local Installation:**
-  ```bash
-  python .agents/skills/mimir/scripts/mimir.py "<USER_QUERY>" --output artifacts/mimir_solution.md
-  ```
-*Once the script finishes, read `artifacts/mimir_solution.md` and present the hardened synthesis and core heuristics to the user.*
+Worker conversations are disposable; results remain on Mímir's blackboard and
+in its report. Codex/Claude use native persistence controls. AGY/OpenCode use
+per-call temporary storage, removed after the call. Temporary isolation is not
+native zero-persistence; see the compatibility reference. Login reuse consumes
+the account's allowance or configured provider charges.
 
-#### Mode B: Native In-Harness Mode (Direct Persona & Protocol)
-For immediate conversational responses without launching background subprocesses, directly adopt the Mímir persona and apply the 5-phase cognitive protocol (see `prompts/MIMIR_SYSTEM_PROMPT.md`):
-1. **Phase 1: Scryer** – Identify authoritative primary sources.
-2. **Phase 2: Dissection** – Decompose with Kahn DAG & JEV branch pruning.
-3. **Phase 3: Execution** – Solve each subtask with strict EvidenceContracts.
-4. **Phase 4: Red-Team & GEPA** – Attack assumptions and Pareto-mutate the design.
-5. **Phase 5: The Word of Mímir** – Deliver the final truth and core heuristics.
+The engine reads/appends `LEARNINGS.md` in its own skill directory. Separate
+copied installations have separate memories. Do not change global CLI configuration
+or purge user sessions as part of an investigation.
 
----
+## Mode B: Native conversational protocol
 
-### Terminal Quickstart
+For a user-requested direct response without the engine, follow
+[MIMIR_SYSTEM_PROMPT.md](prompts/MIMIR_SYSTEM_PROMPT.md): research, decompose and
+prioritize, resolve with evidence, challenge assumptions, synthesize. Explain
+that this is conversational mode: it does not execute the Python DAG, blackboard,
+hashing, or persistence machinery. Do not imply that a swarm ran.
 
-```bash
-# Auto-detect best available backend (Codex, AGY, OpenAI, Claude):
-python scripts/mimir.py "Any complex engineering, research, or architecture query"
+## Design and controls
 
-# Run via OpenAI Codex CLI (zero API keys, local session):
-python scripts/mimir.py "Design a fault-tolerant distributed queue" --backend codex
+[MIMIR_PORTING_PROMPT.md](prompts/MIMIR_PORTING_PROMPT.md) specifies the pipeline.
+Porting changes the backend adapter while preserving that pipeline. Native
+sub-agents are not an automatic replacement for the engine.
 
-# Run via Antigravity CLI:
-python scripts/mimir.py "Design a fault-tolerant distributed queue" --backend agy
-
-# Run via OpenAI API:
-export OPENAI_API_KEY="sk-..."
-python scripts/mimir.py "Optimize hybrid vector-keyword search" --backend openai --model gpt-4o-mini
-
-# Run via Anthropic Claude:
-export ANTHROPIC_API_KEY="sk-ant-..."
-python scripts/mimir.py "Audit consensus protocol security" --backend anthropic --model claude-3-5-haiku-20241022
-
-# Run via Local Ollama:
-export OPENAI_BASE_URL="http://localhost:11434/v1"
-python scripts/mimir.py "Analyze local logs" --backend openai --model qwen2.5:7b
-```
-
----
+Run `python <skill-dir>/scripts/mimir.py --help` for flags including `--sources`,
+`--depth`, and `--no-jev`. Precedence is explicit command arguments, then
+`MIMIR_BACKEND` / `MIMIR_<BACKEND>_MODEL` / `MIMIR_MODEL` / `MIMIR_EFFORT`, then
+the saved project profile. A different backend never inherits another backend's
+saved model or effort.
 
 ## Svenska
 
-# M Í M I R // Vishetens Väktare & Autonom Svärm
-
-> *"Drick ur Mimers brunn. Sanningen är silad ur kosmos brus."*  
-> *"Drink from the Well. Truth distilled from the noise of the cosmos."*
-
-Denna skill förvandlar din AI-assistent till **M Í M I R** – den allvetande orakelsvärmen uppkallad efter den nordiska mytologins visaste varelse. Mímir kombinerar uråldrig visdom med modern AI-ingenjörskonst för att autonomt reda ut och lösa vilken komplex fråga som helst:
-
-1. **Mímirs Världsspaning (Omni-Channel Sensor Array):** Söker dynamiskt genom forskningsarkiv (arXiv), källkods-repos (GitHub), officiella specifikationer, branschforum (HackerNews) eller öppna nätet via TLS-säkrade förfrågningar utan externa API-nycklar.
-2. **Kahn-Validerad Rekursiv RLM DAG:** Bryter ned målet till atomära uppgifter med garanterad referensintegritet och automatisk deadlock-eliminering.
-3. **JEV System-1 Beslutsgrind:** Blixtsnabba, hårt typade beslut och matematisk grenbeskärning via Joint Expected Value (JEV) som minimerar onödig exekveringstid och kostnad.
-4. **Anti-Hallucination via EvidenceContracts:** Alla slutsatser förankras med kryptografiska SHA256-hashar mot en delad **Blackboard**.
-5. **Adversariell Red-Team Prövning & GEPA:** Stresstestar och härdar visdomen mot motståndarkritik, kantfall och race conditions via Genetic-Pareto Reflektion.
-6. **Långtidsminne ([LEARNINGS.md](file://./LEARNINGS.md)):** Bygger en kumulativ minnesbank som läses in vid start och växer för varje uppdrag.
-7. **Multi-Backend Stöd:** Körs sömlöst med OpenAI Codex CLI (`codex`), Antigravity CLI (`agy`), OpenAI API (`gpt-4o-mini`, m.fl.), Anthropic Claude API (`claude-3-5-haiku`, `claude-3-7-sonnet`) eller lokala modeller via Ollama/vLLM. Inga API-nycklar behövs vid användning av `codex` eller `agy`.
-8. **Tvåspråkig Persona (SV / EN):** Talar med lugn, auktoritär skärpa på både svenska och engelska.
-
----
-
-### 🤖 Körning via Harness (Codex & Antigravity)
-
-När användaren aktiverar Mímir (via `$mimir`, "använd mimir för att analysera...", eller ber om en djup arkitekturvalidering):
-
-#### Läge A: Svärmexekvering i bakgrunden (Autonom Python-motor)
-Använd ditt terminalverktyg (`run_command` i AGY, `bash` i Codex) för att köra motorn i bakgrunden:
-- **I Codex CLI:**
-  ```bash
-  python ~/.codex/skills/mimir/scripts/mimir.py "<ANVÄNDARFRÅGA>" --backend codex --output artifacts/mimir_solution.md
-  ```
-- **I Antigravity CLI (AGY):**
-  ```bash
-  python ~/.gemini/config/skills/mimir/scripts/mimir.py "<ANVÄNDARFRÅGA>" --backend agy --output artifacts/mimir_solution.md
-  ```
-- **Från projektlokal installation:**
-  ```bash
-  python .agents/skills/mimir/scripts/mimir.py "<ANVÄNDARFRÅGA>" --output artifacts/mimir_solution.md
-  ```
-*När körningen är klar, läs `artifacts/mimir_solution.md` och presentera den Pareto-härdade lösningen och kärnheuristikerna i chatten.*
-
-#### Läge B: Direkt In-Harness Läge (Persona & Kognitivt Protokoll)
-För snabba svar direkt i dialogen utan externa bakgrundsprocesser, anamma Mimers persona och exekvera det 5-fasiga kognitiva protokollet direkt i kontexten (se `prompts/MIMIR_SYSTEM_PROMPT.md`):
-1. **Fas 1: Världsspaning** – Identifiera primära auktoritetskällor.
-2. **Fas 2: Dissektion** – Dekomponera med Kahn DAG och JEV-beskärning.
-3. **Fas 3: Exekvering** – Lös atomära deluppgifter med strikta EvidenceContracts.
-4. **Fas 4: Red-Team & GEPA** – Motståndarkritik och Pareto-mutation.
-5. **Fas 5: Mimers Ord** – Leverera slutgiltig sanning och spara till minnesbanken.
-
----
-
-### Snabbstart i Terminalen
-
-```bash
-# Kör via automatisk motoridentifiering:
-python scripts/mimir.py "Vilken fråga som helst på svenska eller engelska"
-
-# Kör med OpenAI Codex CLI (noll API-nycklar, använder lokal Codex-inloggning):
-python scripts/mimir.py "Designa ett feltolerant distribuerat kösystem" --backend codex
-
-# Kör med Antigravity (standard om agy är installerat):
-python scripts/mimir.py "Designa ett feltolerant distribuerat kösystem" --backend agy
-
-# Kör med OpenAI API (eller kompatibel endpoint):
-export OPENAI_API_KEY="sk-..."
-python scripts/mimir.py "Optimera en hybrid sökalgoritm" --backend openai --model gpt-4o-mini
-
-# Kör med Anthropic Claude:
-export ANTHROPIC_API_KEY="sk-ant-..."
-python scripts/mimir.py "Granska protokollsäkerhet" --backend anthropic --model claude-3-5-haiku-20241022
-
-# Kör med lokal Ollama:
-export OPENAI_BASE_URL="http://localhost:11434/v1"
-python scripts/mimir.py "Analysera lokal data" --backend openai --model qwen2.5:7b
-```
-
----
-
-### Flaggor & Anpassning
-- `--output / -o`: Sökväg för rapporten (sparar både `.md` och `.json`). Standard: `artifacts/<namn>.md` i aktuell arbetskatalog.
-- `--backend / -b`: Val av motor (`auto`, `codex`, `agy`, `openai`, `anthropic`, `ollama`).
-- `--model / -m`: Val av mikromodell (t.ex. `gpt-4o-mini`, `gemini-3.8-flash-low`, `claude-3-5-haiku-20241022`).
-- `--sources / -s`: Styr sökningen mot specifika källor (t.ex. `--sources github.com,news.ycombinator.com`).
-- `--skip-web`: Hoppar över omvärldsbevakning om du vill köra offline.
-- `--no-jev`: Inaktiverar JEV-beskärning och System 1-screening.
-- `--depth`: Maximalt rekursionsdjup för dekomponering (standard: `2`).
-
----
-
-## Filöversikt / File Index
-
-- [install.sh](file://./install.sh) – Snabbinstallationsscript för Linux / macOS / WSL (curl-pipe eller lokal).
-- [install.ps1](file://./install.ps1) – Snabbinstallationsscript för Windows PowerShell.
-- [scripts/install.py](file://./scripts/install.py) – Plattformsoberoende Python-installer för global eller projektlokal installation.
-- [LEARNINGS.md](file://./LEARNINGS.md) – Mimers beständiga minnesbank över alla körningar / Persistent memory bank across all runs.
-- [scripts/mimir.py](file://./scripts/mimir.py) – Huvudorkestrator med terminal-HUD och Mímir-persona / Main orchestrator and terminal HUD.
-- [scripts/backend.py](file://./scripts/backend.py) – Universell LLM-backend (Codex, AGY, OpenAI, Anthropic, Ollama).
-- [scripts/jev_gate.py](file://./scripts/jev_gate.py) – System 1 Decision Gate, kalibrerad evidensgranskning och JEV-pruning.
-- [scripts/task_graph.py](file://./scripts/task_graph.py) – Kahn DAG-dekomposition, Blackboard och `EvidenceContract`.
-- [scripts/research_scout.py](file://./scripts/research_scout.py) – Käll-agnostisk omni-channel omvärldsspaning / Omni-channel research scout.
-- [scripts/jarvis_memory.py](file://./scripts/jarvis_memory.py) – Minneshanterare för inläsning och konsolidering / Memory manager.
-- [scripts/gepa_optimizer.py](file://./scripts/gepa_optimizer.py) – GEPA Pareto-reflektionsmotor / Pareto reflection engine.
-- [prompts/MIMIR_SYSTEM_PROMPT.md](file://./prompts/MIMIR_SYSTEM_PROMPT.md) – Portabel systemprompt för Claude, ChatGPT, Codex och Cursor.
-- [prompts/MIMIR_PORTING_PROMPT.md](file://./prompts/MIMIR_PORTING_PROMPT.md) – Meta-prompt för att bygga en egen Mímir i andra miljöer.
+Använd Python-svärmen för en Mímir-utredning: hitta motorn relativt den laddade
+skill-filen, skicka ett självständigt mål med alla begränsningar och välj en
+inloggad CLI-backend uttryckligen. Kontrollera modell, låg ansträngningsnivå och
+sessionshantering med `--check`. Låt motorn hantera DAG, JEV, Blackboard och
+motståndargranskning. Läs rapporten och JSON-resultatet efter lyckad körning.
+Ett hashvärde styrker resultatets identitet, inte dess sanningshalt. Vid fel ska
+bristerna redovisas; byt inte tyst till en annan motor eller ett direkt chatsvar.

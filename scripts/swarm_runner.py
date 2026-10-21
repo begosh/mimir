@@ -21,7 +21,11 @@ def main():
     parser = argparse.ArgumentParser(description="M Í M I R // Swarm Runner")
     parser.add_argument("question", type=str, help="Den komplexa frågan, strategin eller optimeringsmålet.")
     parser.add_argument("--output", "-o", type=str, default="artifacts/mimir_artifact.json", help="Utdatasökväg för rapporten.")
-    parser.add_argument("--backend", "-b", type=str, default="auto", choices=["auto", "agy", "codex", "openai", "anthropic", "ollama"], help="LLM-backend motor.")
+    parser.add_argument("--backend", "-b", type=str, default=None, choices=["auto", "agy", "codex", "claude", "opencode", "openai", "anthropic", "ollama"], help="Backend override; otherwise use saved project profile")
+    parser.add_argument("--effort", default=None, help="Worker effort or OpenCode variant")
+    parser.add_argument("--worker-timeout", type=float, default=180, help="Timeout per CLI call in seconds")
+    parser.add_argument("--concurrency", type=int, default=4, help="Maximum concurrent workers")
+    parser.add_argument("--progress", choices=["terminal", "jsonl"], default="terminal", help="Progress display format")
     parser.add_argument("--model", "-m", type=str, default=None, help="Modell för mikromodeller.")
     parser.add_argument("--skip-web", action="store_true", help="Hoppa över omvärldsspaning.")
     parser.add_argument("--depth", type=int, default=2, help="Max rekursionsdjup.")
@@ -43,6 +47,10 @@ def main():
         max_depth=args.depth,
         sources=source_list,
         enable_jev=not args.no_jev,
+        effort=args.effort,
+        worker_timeout=args.worker_timeout,
+        max_concurrency=args.concurrency,
+        progress_format=args.progress,
     ))
 
 
