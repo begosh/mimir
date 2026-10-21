@@ -87,6 +87,21 @@ requests for every run.
    Omit backend/model/effort arguments when reusing saved setup. Default concurrency is 4 and timeout is
    180 seconds per CLI call; override with `--concurrency` / `--worker-timeout`.
    Use `--skip-web` only when external scouting is intentionally excluded.
+   **Phased Execution Pattern (Recommended for Conversational Agents)**:
+   In agentic harnesses where shell commands background or wait (Antigravity, Cursor, Codex),
+   running all phases in one monolithic 5-minute call forces the user to sit in complete silence.
+   Instead, execute in 3 discrete, fast phases using `--phase`:
+   - **Step 1 (Plan & Runes, ~20s)**:
+     `python -u <skill-dir>/scripts/mimir.py --goal-file <objective> --backend <backend> --model <model> --effort low --phase plan --state-file artifacts/mimir_state.json`
+     *Present the carved runes, task roles, and JEV scores directly in the chat to the user.*
+   - **Step 2 (Swarm Execution, ~60-90s)**:
+     `python -u <skill-dir>/scripts/mimir.py --phase execute --state-file artifacts/mimir_state.json`
+     *Report that the swarm has returned with 100% verified evidence contracts.*
+   - **Step 3 (Hardening & Synthesis, ~30s)**:
+     `python -u <skill-dir>/scripts/mimir.py --phase synthesize --state-file artifacts/mimir_state.json --output <report.md>`
+     *Present the final Pareto-hardened Word of Mímir and link to the generated report.*
+   This gives the user continuous, authentic conversational milestones between short commands without hacky polling loops or silent freezes. For standalone terminal runs, `--phase all` (the default) runs the entire pipeline in one go.
+
    **Mímir Execution & Clean UI (Conversational UX)**:
    Balance live visibility against chat UI cleanliness. In environments like Antigravity,
    repeated timer calls (schedule) generate visible UI pills/cards that clutter the user's scrollback.

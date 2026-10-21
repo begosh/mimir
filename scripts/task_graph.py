@@ -256,6 +256,51 @@ class TaskGraph:
         return tiers
 
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "goal": self.goal,
+            "nodes": {
+                nid: {
+                    "id": n.id,
+                    "role": n.role,
+                    "title": n.title,
+                    "prompt": n.prompt,
+                    "dependencies": sorted(list(n.dependencies)),
+                    "depth": n.depth,
+                    "max_depth": n.max_depth,
+                    "is_atomic": n.is_atomic,
+                    "status": n.status.value if hasattr(n.status, "value") else str(n.status),
+                    "jev_score": n.jev_score,
+                }
+                for nid, n in self.nodes.items()
+            }
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TaskGraph":
+        graph = cls(goal=data.get("goal", ""))
+        for nid, nd in data.get("nodes", {}).items():
+            status_val = nd.get("status", "PENDING")
+            try:
+                status = TaskStatus(status_val)
+            except ValueError:
+                status = TaskStatus.PENDING
+            node = TaskNode(
+                id=nd["id"],
+                role=nd["role"],
+                title=nd["title"],
+                prompt=nd["prompt"],
+                dependencies=set(nd.get("dependencies", [])),
+                depth=nd.get("depth", 0),
+                max_depth=nd.get("max_depth", 4),
+                is_atomic=nd.get("is_atomic", True),
+                status=status,
+                jev_score=nd.get("jev_score", 1.0),
+            )
+            graph.add_node(node)
+        return graph
+
+
 class RecursiveDecomposer:
     """
     Recursive Language Model (RLM) engine that decomposes complex goals
