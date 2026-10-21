@@ -238,6 +238,13 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stream.flush_count, 1)
         self.assertEqual(json.loads(stream.getvalue())["event"], "phase_started")
 
+        term_stream = Capture()
+        with redirect_stdout(term_stream):
+            ui_term = mimir.MimirConsole(progress_format="terminal")
+            ui_term.print_phase(2, "Dissektion", "Decomposition")
+        self.assertGreaterEqual(term_stream.flush_count, 1)
+        self.assertIn("FAS 2", term_stream.getvalue())
+
     def test_research_and_terminal_modes_report_actual_state(self):
         brief = IntelligenceBrief(topic="fixture")
         brief.items.append(ResearchItem(channel="spec", title="Reference", url="https://example.org/spec", summary="Fixture"))

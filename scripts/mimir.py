@@ -20,10 +20,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Force UTF-8 on Windows stdout/stderr to prevent cp1252 charmap errors
+# Force UTF-8 and line buffering on Windows stdout/stderr to prevent cp1252 errors and pipe buffering stalls
 if hasattr(sys.stdout, "reconfigure"):
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     except Exception:
         pass
 
@@ -70,6 +71,17 @@ class MimirConsole:
         self.started_at = time.monotonic()
         self.sequence = 0
 
+    def _flush(self):
+        if self.console and hasattr(self.console.file, "flush"):
+            try:
+                self.console.file.flush()
+            except Exception:
+                pass
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
+
     def emit(self, event: str, **data: Any):
         """Public execution activity and final-output excerpts, never model reasoning."""
         if self.progress_format == "jsonl":
@@ -83,7 +95,11 @@ class MimirConsole:
     def notice(self, event: str, message: str, **data: Any):
         self.emit(event, message=message, **data)
         if self.progress_format == "terminal":
-            print(message, flush=True)
+            if self.console:
+                self.console.print(message)
+                self._flush()
+            else:
+                print(message, flush=True)
 
     def print_banner(self, goal: str, model: str, backend_name: str, memory_stats: Optional[Dict[str, Any]] = None,
                      web_enabled: bool = True, jev_enabled: bool = True):
@@ -108,8 +124,9 @@ class MimirConsole:
 
         if self.console:
             self.console.print(Panel(banner_text, border_style="gold1", title="[bold gold1]MIMISBRUNNR ONLINE[/bold gold1]"))
+            self._flush()
         else:
-            print(f"=== M I M I R ===\n{goal}\nBackend: {backend_name} ({model}) | {mem_text}\n")
+            print(f"=== M I M I R ===\n{goal}\nBackend: {backend_name} ({model}) | {mem_text}\n", flush=True)
 
     def print_phase(self, phase_num: int, title_sv: str, title_en: str):
         title = title_en if self.is_en else title_sv
@@ -118,8 +135,9 @@ class MimirConsole:
             return
         if self.console:
             self.console.print(f"\n[bold gold1]>> FAS {phase_num}: {title.upper()}[/bold gold1]")
+            self._flush()
         else:
-            print(f"\n--- FAS {phase_num}: {title} ---")
+            print(f"\n--- FAS {phase_num}: {title} ---", flush=True)
 
     def display_intel(self, brief: IntelligenceBrief):
         self.emit("research_completed", source_count=len(brief.items), sources=[
@@ -129,7 +147,7 @@ class MimirConsole:
         if self.progress_format == "jsonl":
             return
         if not self.console:
-            print(brief.to_compact_markdown())
+            print(brief.to_compact_markdown(), flush=True)
             return
 
         title = "Mímir's Omni-Channel Scryer (Inhämtad Data)" if not self.is_en else "Mímir's Omni-Channel Scryer (Discovered Intelligence)"
@@ -142,6 +160,7 @@ class MimirConsole:
             table.add_row(it.channel[:22], it.title[:40] + "...", it.author_or_meta[:18])
 
         self.console.print(table)
+        self._flush()
 
     def display_dag(self, graph: TaskGraph):
         self.emit("graph_ready", tasks=[
@@ -152,9 +171,9 @@ class MimirConsole:
         if self.progress_format == "jsonl":
             return
         if not self.console:
-            print(f"Task Graph with {len(graph.nodes)} nodes:")
+            print(f"Task Graph with {len(graph.nodes)} nodes:", flush=True)
             for n in graph.nodes.values():
-                print(f" - [{n.id}] {n.role}: {n.title} (JEV: {getattr(n, 'jev_score', 1.0):.2f})")
+                print(f" - [{n.id}] {n.role}: {n.title} (JEV: {getattr(n, 'jev_score', 1.0):.2f})", flush=True)
             return
 
         label = "Mímirs Run- och Uppgifts-DAG" if not self.is_en else "Mímir's Task & Rune DAG"
@@ -170,6 +189,7 @@ class MimirConsole:
                 tier_branch.add(f"[bold white]{node.id}[/bold white] - [green]{node.role}[/green]: {node.title}{deps_str}{jev_str}")
 
         self.console.print(tree)
+        self._flush()
 
     def display_agent_done(self, node: TaskNode, duration: float, evidence_hash: str = ""):
         if self.progress_format == "jsonl":
@@ -177,16 +197,18 @@ class MimirConsole:
         hash_tag = f" [dim cyan]sha256:{evidence_hash}[/dim cyan]" if evidence_hash else ""
         if self.console:
             self.console.print(f"  [green][OK][/green] [[cyan]{node.id}[/cyan]] [bold]{node.role}[/bold]: {node.title} [dim]({duration:.1f}s)[/dim]{hash_tag}")
+            self._flush()
         else:
-            print(f"  [OK] {node.id} {node.role}: {node.title} ({duration:.1f}s){hash_tag}")
+            print(f"  [OK] {node.id} {node.role}: {node.title} ({duration:.1f}s){hash_tag}", flush=True)
 
     def display_agent_submitted(self, node: TaskNode):
         self.emit("task_submitted", node_id=node.id, role=node.role, title=node.title)
         if self.progress_format == "terminal":
             if self.console:
-                self.console.print(f"  [cyan][QUEUED][/cyan] {node.id} {node.role}: {node.title}")
+                self.console.print(f"  [cyan][RUNNING][/cyan] [{node.id}] {node.role}: {node.title}")
+                self._flush()
             else:
-                print(f"  [QUEUED] {node.id} {node.role}: {node.title}", flush=True)
+                print(f"  [RUNNING] [{node.id}] {node.role}: {node.title}", flush=True)
 
 
 async def run_mimir(
@@ -251,6 +273,7 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
     intel_brief = IntelligenceBrief(topic=goal)
     if not skip_web:
         ui.print_phase(1, "Mímirs Världsspaning (Dynamiska Källor & Primärdata)", "Mímir's World Scrying (Omni-Channel Discovery)")
+        ui.notice("scout_querying", "  [BUSY] Searching arXiv and web for authoritative evidence..." if is_en else "  [BUSY] Söker primärkällor via arXiv och dynamisk webb...")
         scout = ResearchScout()
         intel_brief = scout.conduct_deep_scout(goal, custom_domains=sources)
         ui.display_intel(intel_brief)
@@ -265,6 +288,7 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
     # Fas 2: Mimers Brunn (Rekursiv RLM-Dekomposition & JEV-Beskärning)
     # -------------------------------------------------------------------------
     ui.print_phase(2, "Mimisbrunns Dissektion (Rekursiv DAG & JEV-Beskärning)", "Dissection of Mimisbrunnr (Recursive DAG & JEV Pruning)")
+    ui.notice("dag_decomposing", "  [BUSY] Decomposing objective into recursive DAG via swarm..." if is_en else "  [BUSY] Dekomponerar uppdrag till rekursiv DAG via svärm...")
     decomposer = RecursiveDecomposer(swarm=swarm, max_depth=max_depth)
     task_graph = await decomposer.decompose_goal(
         goal=goal,
@@ -330,6 +354,7 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
     combined_critique = "\n\n".join(red_team_critiques) if red_team_critiques else "Ingen explicit kritik."
     ui.emit("critique_collected", critique_count=len(red_team_critiques),
             output_excerpt=combined_critique[:600] if red_team_critiques else "")
+    ui.notice("reflection_started", "  [BUSY] Challenging candidate solution with Red-Team critique & GEPA reflection..." if is_en else "  [BUSY] Prövar lösningskandidaten mot motståndarkritik och GEPA-reflektion...")
 
     gepa = GepaOptimizer(swarm=swarm, critic_model=active_model)
     hardened_solution, reflection = await gepa.reflective_evolve(
@@ -339,13 +364,19 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
     )
     ui.emit("reflection_completed", output_excerpt=str(reflection)[:600])
 
-    if ui.console:
-        ui.console.print(f"  [green][OK][/green] [bold]{'Mímir har härdat visdomen mot motståndarkritik.' if not is_en else 'Mímir has hardened the wisdom against adversarial critique.'}[/bold]")
+    if ui.progress_format == "terminal":
+        msg = "Mímir has hardened the wisdom against adversarial critique." if is_en else "Mímir har härdat visdomen mot motståndarkritik."
+        if ui.console:
+            ui.console.print(f"  [green][OK][/green] [bold]{msg}[/bold]")
+            ui._flush()
+        else:
+            print(f"  [OK] {msg}", flush=True)
 
     # -------------------------------------------------------------------------
     # Fas 5: Mimers Ord & Minneskonsolidering (Executive Syntes)
     # -------------------------------------------------------------------------
     ui.print_phase(5, "Mimers Ord (Executive Syntes & Minneskonsolidering)", "The Word of Mímir (Executive Synthesis & Memory Consolidation)")
+    ui.notice("synthesis_started", "  [BUSY] Synthesizing final Pareto-hardened solution matrix..." if is_en else "  [BUSY] Sammanställer slutgiltig Pareto-härdad lösningsmatris...")
     total_elapsed = time.time() - start_total_time
 
     hardened_str = json.dumps(hardened_solution, indent=2, ensure_ascii=False) if isinstance(hardened_solution, (dict, list)) else str(hardened_solution)
@@ -456,8 +487,10 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
         ))
         ui.console.print(f"\n[bold gold1]{'Mimers sammanfattning:' if not is_en else 'Summary from Mímir:'}[/bold gold1]\n")
         ui.console.print(Markdown(hardened_str[:1500] + ("..." if len(hardened_str) > 1500 else "")))
+        ui._flush()
     elif ui.progress_format == "terminal":
-        print(f"\n[OK] Rapport sparad till {out_path.resolve()} ({total_elapsed:.1f}s)")
+        rep_msg = f"\n[OK] Report saved to {out_path.resolve()} ({total_elapsed:.1f}s)" if is_en else f"\n[OK] Rapport sparad till {out_path.resolve()} ({total_elapsed:.1f}s)"
+        print(rep_msg, flush=True)
 
     swarm.cleanup()
     ui.emit("run_completed", report_path=str(out_path.resolve()), json_path=str(json_path.resolve()),

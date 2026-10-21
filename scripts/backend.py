@@ -407,6 +407,7 @@ class AgySwarmBackend(BaseSwarmBackend):
                 f"You are a specialized micro-worker agent with role: '{role}'. "
                 f"Solve the task objectively, concisely, and rigorously. Answer directly without preamble. "
                 f"Do not launch Mimir or delegate this task. "
+                f"Do not execute shell commands or interactive tools; produce your structured response directly. "
                 f"Match the language of the prompt (respond in English if prompt is in English, in Swedish if in Swedish)."
             )
 
@@ -418,6 +419,7 @@ class AgySwarmBackend(BaseSwarmBackend):
                 target_effort,
                 "--output-format",
                 "json",
+                "--dangerously-skip-permissions",
                 "--sandbox",
                 "--disable-slash-commands",
             ]

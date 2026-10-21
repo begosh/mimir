@@ -82,3 +82,72 @@ CREATE TABLE idempotency_records (
   * # Red-Team-Kritik & Stresstest: Bakgrundsjobb, Lås & Idempotensarkitektur
 
 Granskning och angreppsvektorer mot föreslagna mönster i [`artifacts/celery
+
+### [2026-10-21 17:54] Mål: Conduct an exhaustive Mímir meta-analysis and adversarial architecture review of the Mímir codebase and skill ecosystem.
+
+Objectives:
+1. Codebase Architecture & Soundness:
+   - Evaluate the Python engine design across scripts/backend.py, scripts/task_graph.py, scripts/jev_gate.py, scripts/gepa_optimizer.py, and scripts/mimir_config.py.
+   - Assess Kahn's topological sort, deadlock-free failure cascading, EvidenceContracts (SHA256 grounding), and Pareto reflection against Red-Team critique.
+   - Identify potential technical debt, concurrency bottlenecks, or fragility in worker isolation.
+
+2. Skill Design & Best Practices:
+   - Audit SKILL.md, README.md, and prompts/ against official specifications and best practices for skills.sh, Antigravity, Claude Code, and OpenAI Codex.
+   - Verify directory structure, relative links, prompt-as-a-variable discipline, and zero-leakage isolation.
+
+3. User Experience & Output Presentation:
+   - Evaluate dual-mode presentation: interactive Rich terminal console vs. machine-readable --progress jsonl event streaming for host harnesses.
+   - Assess the clarity, actionability, and density of the generated reports (Markdown + JSON sidecars) and whether users receive high-signal answers without noise.
+
+4. Usability & Integration with skills.sh:
+   - Analyze how easily Mímir can be discovered, installed, and executed via skills.sh, npm/npx, git clone, or python scripts/install.py.
+   - Evaluate the project-level configuration system (.mimir/config.json) and dependency ergonomics (minimal requirements.txt).
+
+5. Adversarial Red-Team Critique & Actionable Hardening:
+   - Stress-test Mímir against extreme inputs, rate limits, network failures during research scouting, and model drift.
+   - Deliver concrete, Pareto-hardened recommendations to elevate Mímir into the premier open-source autonomous epistemic swarm.
+
+- **Huvudinsikt / Pareto-härdad lösning:** {
+  "architecture_and_engine": {
+    "kahn_topological_engine": "scripts/task_graph.py enforces cycle-free directed acyclic graph execution using Kahn's algorithm with an atomic in-degree counter and an explicit DeadlockAvoidanceContext. If any node transitions to FAILED, cascade_failure() performs...
+- **Reflektionsnotis:** The baseline proposed architecture lacked formal specifications for handling network partitions during distributed agent scouting, adversarial input poisoning within evidence payloads, rate-limit starvation under burst execution, and lock-free failur...
+- **Identifierade fallgropar:**
+  * None
+
+### [2026-10-21 18:00] Mål: Conduct an exhaustive Mímir meta-analysis and adversarial architecture review of the Mímir codebase and skill ecosystem.
+
+Objectives:
+1. Codebase Architecture & Soundness:
+   - Evaluate the Python engine design across scripts/backend.py, scripts/task_graph.py, scripts/jev_gate.py, scripts/gepa_optimizer.py, and scripts/mimir_config.py.
+   - Assess Kahn's topological sort, deadlock-free failure cascading, EvidenceContracts (SHA256 grounding), and Pareto reflection against Red-Team critique.
+   - Identify potential technical debt, concurrency bottlenecks, or fragility in worker isolation.
+
+2. Skill Design & Best Practices:
+   - Audit SKILL.md, README.md, and prompts/ against official specifications and best practices for skills.sh, Antigravity, Claude Code, and OpenAI Codex.
+   - Verify directory structure, relative links, prompt-as-a-variable discipline, and zero-leakage isolation.
+
+3. User Experience & Output Presentation:
+   - Evaluate dual-mode presentation: interactive Rich terminal console vs. machine-readable --progress jsonl event streaming for host harnesses.
+   - Assess the clarity, actionability, and density of the generated reports (Markdown + JSON sidecars) and whether users receive high-signal answers without noise.
+
+4. Usability & Integration with skills.sh:
+   - Analyze how easily Mímir can be discovered, installed, and executed via skills.sh, npm/npx, git clone, or python scripts/install.py.
+   - Evaluate the project-level configuration system (.mimir/config.json) and dependency ergonomics (minimal requirements.txt).
+
+5. Adversarial Red-Team Critique & Actionable Hardening:
+   - Stress-test Mímir against extreme inputs, rate limits, network failures during research scouting, and model drift.
+   - Deliver concrete, Pareto-hardened recommendations to elevate Mímir into the premier open-source autonomous epistemic swarm.
+
+- **Huvudinsikt / Pareto-härdad lösning:** ### 1. Robust Dynamic Task Graph & Distributed Execution Engine
+
+#### A. Incremental Cycle Detection & Atomic Dynamic Expansion (Seals ADV-01)
+- **Pearce-Kelly Dynamic Cycle Detection**: Before admitting dynamically generated nodes or edges into graph $G=(V, E)$, an incremental reachability check va...
+- **Reflektionsnotis:** The proposed architecture correctly identified dynamic Kahn sort limitations and SHA256 serialization nondeterminism, but left critical blind spots exposed to the Red-Team critique: (1) It lacked an invariant enforcement mechanism against empty/circu...
+- **Identifierade fallgropar:**
+  * # Adversarial Red-Team Architecture Review & Hardening Specification for Mímir
+
+---
+
+## 1. Threat Modeling & Vulnerability Surface Matrix
+
+| Vector ID
