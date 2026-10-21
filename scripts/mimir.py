@@ -366,7 +366,7 @@ async def _run_mimir(goal, output_path, model, backend, skip_web, max_depth,
 
     gepa = GepaOptimizer(swarm=swarm, critic_model=active_model)
     hardened_solution, reflection = await gepa.reflective_evolve(
-        candidate_content=combined_draft[:4000],
+        candidate_content=combined_draft,
         goal=goal,
         critique_points=combined_critique[:2500],
     )
