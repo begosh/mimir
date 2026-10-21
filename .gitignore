@@ -31,8 +31,9 @@ artifacts/*.md
 Thumbs.db
 desktop.ini
 
-# IDEs
+# IDEs & Local Tools
 .idea/
 .vscode/
 *.swp
 *.swo
+.serena/

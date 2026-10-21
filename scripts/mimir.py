@@ -341,7 +341,7 @@ def main():
     parser = argparse.ArgumentParser(description="M Í M I R // Omniscient Oracle & Autonomous Swarm")
     parser.add_argument("goal", type=str, help="Det komplexa målet, forskningsfrågan eller strategin.")
     parser.add_argument("--output", "-o", type=str, default="artifacts/mimir_solution.md", help="Sökväg för rapport")
-    parser.add_argument("--backend", "-b", type=str, default="auto", choices=["auto", "agy", "openai", "anthropic", "ollama"], help="LLM-backend motor")
+    parser.add_argument("--backend", "-b", type=str, default="auto", choices=["auto", "agy", "codex", "openai", "anthropic", "ollama"], help="LLM-backend motor (auto, agy, codex, openai, anthropic, ollama)")
     parser.add_argument("--model", "-m", type=str, default=None, help="Modell för mikromodeller (standard: anpassas efter backend)")
     parser.add_argument("--skip-web", action="store_true", help="Hoppa över extern omvärldsspaning")
     parser.add_argument("--depth", type=int, default=2, help="Maximalt rekursionsdjup för dekomposition")

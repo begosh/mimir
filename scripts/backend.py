@@ -3,6 +3,7 @@ scripts/backend.py
 Universal Multi-Backend Swarm Engine for M Í M I R.
 Abstracts LLM execution across:
 - Antigravity CLI (agy.exe) - Zero API keys, local authenticated session
+- OpenAI Codex CLI (codex.exe) - Zero API keys, local authenticated session
 - OpenAI API & Compatible endpoints (Ollama, LMStudio, vLLM, OpenRouter)
 - Anthropic Claude API (Claude 3.5 Haiku, Claude 3.7 Sonnet)
 - Generic CLI wrappers
@@ -155,6 +156,25 @@ class BaseSwarmBackend(ABC):
             tier_nodes = []
 
             for node in tier:
+                # Check for upstream failures
+                has_failed_dep = any(
+                    graph.nodes[d].status in (TaskStatus.FAILED, TaskStatus.CANCELLED)
+                    for d in node.dependencies
+                    if d in graph.nodes
+                )
+                if has_failed_dep:
+                    node.status = TaskStatus.CANCELLED
+                    continue
+
+                if node.status == TaskStatus.PENDING:
+                    all_deps_done = all(
+                        graph.nodes[d].status == TaskStatus.COMPLETED
+                        for d in node.dependencies
+                        if d in graph.nodes
+                    )
+                    if all_deps_done:
+                        node.status = TaskStatus.READY
+
                 if node.status != TaskStatus.READY:
                     continue
 
@@ -410,6 +430,182 @@ class AgySwarmBackend(BaseSwarmBackend):
         return self.parse_json_from_text(raw_out)
 
 
+class CodexSwarmBackend(BaseSwarmBackend):
+    """
+    Spawns headless codex.exe processes using the user's existing
+    authenticated Codex CLI session. Zero API keys or extra billing required.
+    """
+
+    def __init__(
+        self,
+        default_model: Optional[str] = None,
+        default_effort: str = "low",
+        codex_path: Optional[str] = None,
+        max_concurrency: int = 4,
+    ):
+        super().__init__(default_model=default_model or "default", max_concurrency=max_concurrency)
+        self.default_effort = default_effort
+        self.explicit_model = default_model
+
+        resolved_path = codex_path
+        if not resolved_path:
+            # 1. Direct binary on Windows
+            appdata = os.environ.get("APPDATA", "")
+            direct_exe = (
+                Path(appdata)
+                / "npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe"
+            )
+            if direct_exe.exists():
+                resolved_path = str(direct_exe)
+
+        if not resolved_path:
+            for name in ["codex.exe", "codex", "codex.cmd"]:
+                w = shutil.which(name)
+                if w:
+                    resolved_path = w
+                    break
+
+        if not resolved_path:
+            candidates = [
+                Path.home() / ".local" / "bin" / "codex",
+                Path("/usr/local/bin/codex"),
+                Path.home() / "AppData" / "Roaming" / "npm" / "codex.cmd",
+            ]
+            for c in candidates:
+                if c.exists():
+                    resolved_path = str(c)
+                    break
+
+        if not resolved_path:
+            raise FileNotFoundError(
+                "Could not find 'codex' executable. "
+                "Ensure OpenAI Codex CLI is installed or configure an alternative backend."
+            )
+        self.codex_path = resolved_path
+
+    async def spawn(
+        self,
+        prompt: str,
+        role: str = "Micro-Worker",
+        model: Optional[str] = None,
+        effort: Optional[str] = None,
+        json_schema: Optional[Dict[str, Any]] = None,
+        input_data: Optional[Any] = None,
+    ) -> SwarmResult:
+        async with self.semaphore:
+            target_model = model or self.explicit_model
+            target_effort = effort or self.default_effort
+
+            full_prompt = prompt
+            if input_data is not None:
+                formatted_input = (
+                    json.dumps(input_data, indent=2, ensure_ascii=False)
+                    if isinstance(input_data, (dict, list))
+                    else str(input_data)
+                )
+                full_prompt += f"\n\n--- INPUT DATA ---\n{formatted_input}\n--- END INPUT DATA ---"
+
+            system_instruction = (
+                f"You are a specialized micro-worker agent with role: '{role}'. "
+                f"Solve the task objectively, concisely, and rigorously. Answer directly without preamble."
+            )
+
+            with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f_out:
+                out_file = f_out.name
+
+            schema_file: Optional[str] = None
+            if json_schema:
+                with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w", encoding="utf-8") as f_s:
+                    json.dump(json_schema, f_s)
+                    schema_file = f_s.name
+
+            try:
+                cmd = [
+                    self.codex_path,
+                    "exec",
+                    "--ephemeral",
+                    "--skip-git-repo-check",
+                    "-s", "read-only",
+                    "-o", out_file,
+                ]
+
+                if target_effort:
+                    cmd.extend(["-c", f'model_reasoning_effort="{target_effort}"'])
+
+                if target_model and target_model != "default":
+                    cmd.extend(["-m", target_model])
+
+                if schema_file:
+                    cmd.extend(["--output-schema", schema_file])
+
+                cmd.append(f"{system_instruction}\n\n{full_prompt}")
+
+                start_time = asyncio.get_event_loop().time()
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdin=asyncio.subprocess.DEVNULL,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+
+                stdout, stderr = await proc.communicate()
+                duration = asyncio.get_event_loop().time() - start_time
+
+                raw_out = stdout.decode("utf-8", errors="replace").strip()
+                raw_err = stderr.decode("utf-8", errors="replace").strip()
+
+                content = ""
+                if os.path.exists(out_file):
+                    try:
+                        with open(out_file, "r", encoding="utf-8") as f:
+                            content = f.read().strip()
+                    except Exception:
+                        pass
+
+                if not content:
+                    content = raw_out
+
+                if proc.returncode != 0 and not content:
+                    return SwarmResult(
+                        role=role,
+                        status="ERROR",
+                        data=None,
+                        raw_response=raw_err or raw_out,
+                        duration_seconds=duration,
+                    )
+
+                parsed_data = self.parse_json_from_text(content)
+
+                # Parse tokens if reported in stdout
+                tokens = 0
+                match = re.search(r"tokens used\s*([\d,]+)", raw_out, re.IGNORECASE)
+                if match:
+                    try:
+                        tokens = int(match.group(1).replace(",", ""))
+                    except Exception:
+                        pass
+
+                return SwarmResult(
+                    role=role,
+                    status="SUCCESS",
+                    data=parsed_data,
+                    raw_response=content,
+                    duration_seconds=duration,
+                    tokens_used=tokens,
+                )
+            finally:
+                if os.path.exists(out_file):
+                    try:
+                        os.remove(out_file)
+                    except Exception:
+                        pass
+                if schema_file and os.path.exists(schema_file):
+                    try:
+                        os.remove(schema_file)
+                    except Exception:
+                        pass
+
+
 class OpenAISwarmBackend(BaseSwarmBackend):
     """
     Executes tasks using OpenAI API or OpenAI-compatible endpoints
@@ -627,11 +823,17 @@ def create_swarm_backend(
             except Exception:
                 pass
 
-        # 2. Check OpenAI API Key
+        # 2. Check Codex CLI if installed (zero API keys, local authenticated session)
+        try:
+            return CodexSwarmBackend(default_model=model, max_concurrency=max_concurrency)
+        except Exception:
+            pass
+
+        # 3. Check OpenAI API Key
         if os.environ.get("OPENAI_API_KEY"):
             return OpenAISwarmBackend(default_model=model or "gpt-4o-mini", max_concurrency=max_concurrency)
 
-        # 3. Check Anthropic API Key
+        # 4. Check Anthropic API Key
         if os.environ.get("ANTHROPIC_API_KEY"):
             return AnthropicSwarmBackend(default_model=model or "claude-3-5-haiku-20241022", max_concurrency=max_concurrency)
 
@@ -640,9 +842,11 @@ def create_swarm_backend(
 
     if chosen in ("agy", "antigravity"):
         return AgySwarmBackend(default_model=model or "gemini-3.8-flash-low", max_concurrency=max_concurrency)
+    elif chosen in ("codex", "openai-codex"):
+        return CodexSwarmBackend(default_model=model, max_concurrency=max_concurrency)
     elif chosen in ("openai", "ollama", "vllm", "openrouter"):
         return OpenAISwarmBackend(default_model=model or "gpt-4o-mini", max_concurrency=max_concurrency)
     elif chosen in ("anthropic", "claude"):
         return AnthropicSwarmBackend(default_model=model or "claude-3-5-haiku-20241022", max_concurrency=max_concurrency)
     else:
-        raise ValueError(f"Unknown Mímir backend: '{chosen}'. Supported: 'agy', 'openai', 'anthropic', 'auto'.")
+        raise ValueError(f"Unknown Mímir backend: '{chosen}'. Supported: 'agy', 'codex', 'openai', 'anthropic', 'auto'.")

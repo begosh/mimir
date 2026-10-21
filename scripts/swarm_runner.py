@@ -21,7 +21,7 @@ def main():
     parser = argparse.ArgumentParser(description="M Í M I R // Swarm Runner")
     parser.add_argument("question", type=str, help="Den komplexa frågan, strategin eller optimeringsmålet.")
     parser.add_argument("--output", "-o", type=str, default="artifacts/mimir_artifact.json", help="Utdatasökväg för rapporten.")
-    parser.add_argument("--backend", "-b", type=str, default="auto", choices=["auto", "agy", "openai", "anthropic", "ollama"], help="LLM-backend motor.")
+    parser.add_argument("--backend", "-b", type=str, default="auto", choices=["auto", "agy", "codex", "openai", "anthropic", "ollama"], help="LLM-backend motor.")
     parser.add_argument("--model", "-m", type=str, default=None, help="Modell för mikromodeller.")
     parser.add_argument("--skip-web", action="store_true", help="Hoppa över omvärldsspaning.")
     parser.add_argument("--depth", type=int, default=2, help="Max rekursionsdjup.")

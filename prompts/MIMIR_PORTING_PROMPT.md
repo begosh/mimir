@@ -1,13 +1,14 @@
 # M Í M I R // Porting & Re-Creation Meta-Prompt
 
-> Använd denna prompt i **Claude Code**, **OpenAI Codex**, **Cursor**, **Aider** eller valfri AI-utvecklare för att instruera modellen att bygga eller anpassa en egen instans av Mímir i en ny miljö där `agy.exe` inte finns.
+> **English:** Use this prompt in **Claude Code**, **OpenAI Codex CLI**, **Cursor**, **Aider**, or any AI coding agent to instruct the model to build or port an instance of Mímir to your environment.  
+> **Svenska:** Använd denna prompt i **Claude Code**, **OpenAI Codex**, **Cursor**, **Aider** eller valfri AI-utvecklare för att instruera modellen att bygga eller anpassa en egen instans av Mímir i en ny miljö.
 
 ---
 
 ```markdown
 # TASK: Build / Port "M Í M I R" Autonomous Epistemic Swarm Engine
 
-You are tasked with building or adapting **M Í M I R** – an autonomous multi-agent epistemic research and problem-solving swarm engine originally developed for Antigravity (AGY), now being ported to your current environment (e.g. OpenAI API, Anthropic Claude API, Claude Code, or local Ollama).
+You are tasked with building or adapting **M Í M I R** – an autonomous multi-agent epistemic research and problem-solving swarm engine originally developed for Antigravity (AGY) and OpenAI Codex CLI, now being ported or configured in your current environment (e.g. OpenAI Codex CLI, OpenAI API, Anthropic Claude API, Claude Code, or local Ollama).
 
 ## CORE ARCHITECTURAL SPECIFICATION
 
@@ -52,25 +53,31 @@ Mímir is not a single prompt; it is a five-phase recursive multi-agent pipeline
 
 ---
 
-## HOW TO ADAPT THE LLM BACKEND (Replacing agy.exe)
+## HOW TO ADAPT THE LLM BACKEND
 
-The original implementation spawned headless `agy.exe` subprocesses (`agy --model ... -p ...`). When porting to other environments, implement an abstract backend:
+Mímir supports headless CLI execution (inheriting authenticated local sessions without API keys) as well as direct HTTP API providers:
 
-### Option A: Direct API (OpenAI / Anthropic / Ollama)
-Replace subprocess spawning with an async HTTP caller using standard Python (`urllib.request` or `httpx`):
+### Option A: OpenAI Codex CLI (`codex exec`)
+Spawns headless `codex` subprocesses:
+- `codex exec --ephemeral --skip-git-repo-check -s read-only -o <out_file> "<system_instruction>\n\n<prompt>"`
+- Zero external API keys needed; inherits existing local Codex login and environment proxy.
+
+### Option B: Antigravity CLI (`agy`)
+Spawns headless `agy` subprocesses:
+- `agy --model <model> -p "<prompt>"`
+- Zero external API keys needed; inherits local AGY credentials.
+
+### Option C: Direct API (OpenAI / Anthropic / Ollama)
+Standard async HTTP caller using Python standard library (`urllib.request` or `httpx`):
 - **OpenAI / Ollama:** Send POST to `https://api.openai.com/v1/chat/completions` (or `http://localhost:11434/v1/chat/completions`) with low temperature (0.1–0.2) and `response_format: {"type": "json_object"}`.
 - **Anthropic Claude:** Send POST to `https://api.anthropic.com/v1/messages` with `claude-3-5-haiku-20241022` or `claude-3-7-sonnet-20250219`.
-
-### Option B: Native Agent / Subagent Spawning (Claude Code / Codex CLI)
-If running inside an agentic framework like Claude Code or Codex:
-- Utilize native subagent spawning or background tool execution (`invoke_subagent`, `run_command`, or background tasks) to execute the DAG nodes in parallel.
 
 ---
 
 ## REQUIRED CODE COMPONENTS TO REPRODUCE
 
 When implementing in Python, ensure the following modules are present:
-1. `backend.py`: Base class `BaseSwarmBackend`, `SwarmTask`, `SwarmResult`, and concrete implementations (`OpenAISwarmBackend`, `AnthropicSwarmBackend`, `AgySwarmBackend`).
+1. `backend.py`: Base class `BaseSwarmBackend`, `SwarmTask`, `SwarmResult`, and concrete implementations (`CodexSwarmBackend`, `AgySwarmBackend`, `OpenAISwarmBackend`, `AnthropicSwarmBackend`).
 2. `task_graph.py`: `TaskNode`, `TaskGraph` (with Kahn's topological sort), `Blackboard`, and `EvidenceContract` with SHA256 hashing.
 3. `jev_gate.py`: `JevDecisionGate` for fast System-1 scoring and DAG pruning.
 4. `research_scout.py`: `ResearchScout` with arXiv API query and DuckDuckGo search.
