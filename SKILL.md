@@ -114,6 +114,9 @@ python scripts/mimir.py "Analysera lokal data" --backend openai --model qwen2.5:
 
 ## Filöversikt / File Index
 
+- [install.sh](file://./install.sh) – Snabbinstallationsscript för Linux / macOS / WSL (curl-pipe eller lokal).
+- [install.ps1](file://./install.ps1) – Snabbinstallationsscript för Windows PowerShell.
+- [scripts/install.py](file://./scripts/install.py) – Plattformsoberoende Python-installer för global eller projektlokal installation.
 - [LEARNINGS.md](file://./LEARNINGS.md) – Mimers beständiga minnesbank över alla körningar / Persistent memory bank across all runs.
 - [scripts/mimir.py](file://./scripts/mimir.py) – Huvudorkestrator med terminal-HUD och Mímir-persona / Main orchestrator and terminal HUD.
 - [scripts/backend.py](file://./scripts/backend.py) – Universell LLM-backend (Codex, AGY, OpenAI, Anthropic, Ollama).

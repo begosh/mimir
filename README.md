@@ -4,6 +4,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Bilingual: EN / SV](https://img.shields.io/badge/Bilingual-EN%20%2F%20SV-gold.svg)](#)
 [![Backends: AGY | Codex | OpenAI | Claude | Ollama](https://img.shields.io/badge/Backends-AGY%20%7C%20Codex%20%7C%20OpenAI%20%7C%20Claude%20%7C%20Ollama-green.svg)](#)
+[![skills.sh](https://img.shields.io/badge/skills.sh-compliant-purple.svg)](https://skills.sh)
 
 > [English](#-english) | [Svenska](#-svenska)
 
@@ -17,6 +18,50 @@
 **M Í M I R** is an autonomous multi-agent epistemic research and problem-solving swarm engine, named after the wisest being in Norse mythology. Mímir unites ancient wisdom with modern agentic AI engineering to autonomously solve complex engineering, architectural, scientific, and strategic challenges.
 
 It combines real-time omni-channel research scouting, Kahn-validated acyclic task DAGs, Joint Expected Value (JEV) System-1 decision gating, cryptographic EvidenceContracts, adversarial Red-Team critique with Genetic-Pareto Evolutionary Algorithm (GEPA) reflection, and persistent cumulative memory.
+
+---
+
+### 📦 Installation (skills.sh & Universal Installer)
+
+Mímir can be installed directly into your AI coding agent ecosystem (**OpenAI Codex CLI**, **Google Antigravity**, **Claude Code**, or any agent runtime supporting the open **skills.sh** standard) either **globally** or **project-locally**.
+
+#### Option 1: Via `skills.sh` (npx)
+```bash
+# Add Mímir to current project
+npx skills add begosh/mimir
+
+# Add Mímir globally for all coding agents
+npx skills add begosh/mimir -g
+```
+
+#### Option 2: Quick One-Liner Installers
+```bash
+# Linux / macOS / WSL (Global installation)
+curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --global
+
+# Linux / macOS / WSL (Local project installation)
+curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --project
+```
+
+```powershell
+# Windows PowerShell (Global installation)
+irm https://raw.githubusercontent.com/begosh/mimir/main/install.ps1 | iex
+
+# Windows PowerShell (Local project installation)
+& { irm https://raw.githubusercontent.com/begosh/mimir/main/install.ps1 } -Project .
+```
+
+#### Option 3: From Cloned Repository
+```bash
+git clone https://github.com/begosh/mimir.git
+cd mimir
+
+# Install globally to all detected agents (Codex, Antigravity, Claude, skills.sh)
+python scripts/install.py --global
+
+# Install into a specific project directory
+python scripts/install.py --project /path/to/project
+```
 
 ---
 
@@ -69,21 +114,7 @@ It combines real-time omni-channel research scouting, Kahn-validated acyclic tas
 
 ---
 
-### 🚀 Quickstart & Installation
-
-#### 1. Clone the repository
-```bash
-git clone https://github.com/begosh/mimir.git
-cd mimir
-```
-
-#### 2. Install dependencies
-```bash
-pip install -r requirements.txt
-```
-*(Requires only `rich`, `curl_cffi`, and `beautifulsoup4`. Standard Python handles all HTTP/process calls with zero heavy SDK bloat).*
-
-#### 3. Run Mímir
+### 🚀 Running Mímir
 
 ##### Option A: OpenAI Codex CLI (Zero API keys, uses local Codex login)
 ```bash
@@ -134,14 +165,17 @@ python scripts/mimir.py "Analyze patterns for idempotent APIs" --backend openai 
 
 ```text
 mimir/
-├── SKILL.md                          # Antigravity & Agentic Assistant Skill definition
+├── SKILL.md                          # Antigravity, Codex & skills.sh skill definition
 ├── LEARNINGS.md                      # Persistent long-term memory bank & core heuristics
 ├── README.md                         # Bilingual documentation (English / Swedish)
 ├── requirements.txt                  # Minimal Python dependencies
+├── install.sh                        # Bash installer (Linux / macOS / WSL)
+├── install.ps1                       # PowerShell installer (Windows)
 ├── prompts/
 │   ├── MIMIR_SYSTEM_PROMPT.md        # System prompt for Claude, ChatGPT, Codex, Cursor
 │   └── MIMIR_PORTING_PROMPT.md       # Meta-prompt for porting Mímir to other environments
 └── scripts/
+    ├── install.py                    # Cross-platform Python skill installer
     ├── mimir.py                      # Main orchestrator & Rich terminal HUD
     ├── backend.py                    # Multi-backend engine (Codex, AGY, OpenAI, Claude, Ollama)
     ├── agy_swarm.py                  # Portable wrapper for agy CLI
@@ -164,6 +198,50 @@ mimir/
 **M Í M I R** är en autonom multi-agent- och orakelsvärm för djup forskning, arkitekturdesign och komplex problemlösning, uppkallad efter asatrons visaste varelse. Mímir kombinerar uråldrig visdom med modern AI-ingenjörskonst för att självständigt reda ut och lösa svåra tekniska och strategiska utmaningar.
 
 Systemet förenar dynamisk omvärldsspaning i realtid, Kahn-validerade acykliska uppgiftsgrafer (DAG), Joint Expected Value (JEV) System-1-beslutsgrindar, kryptografiska EvidenceContracts, adversariell Red-Team-granskning med genetisk Pareto-reflektion (GEPA) och ett beständigt kumulativt minne.
+
+---
+
+### 📦 Installation (skills.sh & Universell Installer)
+
+Mímir kan installeras direkt i din AI-agentmiljö (**OpenAI Codex CLI**, **Google Antigravity**, **Claude Code** eller valfri agent som stödjer den öppna standarden **skills.sh**), antingen **globalt** eller **i ett specifikt projekt**.
+
+#### Alternativ 1: Via `skills.sh` (npx)
+```bash
+# Lägg till Mímir i det aktuella projektet
+npx skills add begosh/mimir
+
+# Installera Mímir globalt för alla AI-kodassistenter
+npx skills add begosh/mimir -g
+```
+
+#### Alternativ 2: Snabbinstallation via One-Liner
+```bash
+# Linux / macOS / WSL (Global installation)
+curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --global
+
+# Linux / macOS / WSL (Projektlokal installation)
+curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --project
+```
+
+```powershell
+# Windows PowerShell (Global installation)
+irm https://raw.githubusercontent.com/begosh/mimir/main/install.ps1 | iex
+
+# Windows PowerShell (Projektlokal installation)
+& { irm https://raw.githubusercontent.com/begosh/mimir/main/install.ps1 } -Project .
+```
+
+#### Alternativ 3: Från Klonat Repo
+```bash
+git clone https://github.com/begosh/mimir.git
+cd mimir
+
+# Installera globalt till alla identifierade agenter (Codex, Antigravity, Claude, skills.sh)
+python scripts/install.py --global
+
+# Installera till en specifik projektkatalog
+python scripts/install.py --project /sökväg/till/projekt
+```
 
 ---
 
@@ -192,21 +270,7 @@ Systemet förenar dynamisk omvärldsspaning i realtid, Kahn-validerade acykliska
 
 ---
 
-### 🚀 Snabbstart & Installation
-
-#### 1. Klona projektet
-```bash
-git clone https://github.com/begosh/mimir.git
-cd mimir
-```
-
-#### 2. Installera beroenden
-```bash
-pip install -r requirements.txt
-```
-*(Kräver endast `rich`, `curl_cffi` och `beautifulsoup4`. Standardbiblioteket hanterar alla API- och processanrop utan tunga SDK-beroenden).*
-
-#### 3. Kör Mímir
+### 🚀 Kör Mímir
 
 ##### Alternativ A: OpenAI Codex CLI (Noll API-nycklar via lokal Codex-session)
 ```bash
