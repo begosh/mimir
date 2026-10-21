@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import signal
+import subprocess
 import tempfile
 from contextlib import contextmanager
 import urllib.error
@@ -100,10 +101,19 @@ class BaseSwarmBackend(ABC):
     async def _run_cli(self, cmd: List[str], prompt: Optional[str] = None,
                        env: Optional[Dict[str, str]] = None) -> tuple[int, str, str]:
         """Bound each CLI call and reap it before releasing disposable storage."""
+        kwargs: Dict[str, Any] = {
+            "stdin": asyncio.subprocess.PIPE if prompt is not None else asyncio.subprocess.DEVNULL,
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "env": env,
+        }
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        else:
+            kwargs["start_new_session"] = True
+
         proc = await asyncio.create_subprocess_exec(
-            *cmd, stdin=asyncio.subprocess.PIPE if prompt is not None else asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env,
-            start_new_session=os.name != "nt",
+            *cmd, **kwargs
         )
         try:
             stdout, stderr = await asyncio.wait_for(
@@ -116,6 +126,7 @@ class BaseSwarmBackend(ABC):
                     killer = await asyncio.create_subprocess_exec(
                         "taskkill", "/PID", str(proc.pid), "/T", "/F",
                         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
                     )
                     await killer.wait()
                 elif getattr(proc, "pid", None):
