@@ -438,12 +438,14 @@ class AgySwarmBackend(BaseSwarmBackend):
             if json_schema:
                 cmd.extend(["--json-schema", json.dumps(json_schema)])
 
-            cmd.extend(["-p", f"{system_instruction}\n\n{full_prompt}"])
-
             start_time = asyncio.get_running_loop().time()
             try:
                 with disposable_cli_env("agy") as sub_env:
-                    code, raw_out, raw_err = await self._run_cli(cmd, env=sub_env)
+                    code, raw_out, raw_err = await self._run_cli(
+                        cmd,
+                        prompt=f"{system_instruction}\n\n{full_prompt}",
+                        env=sub_env,
+                    )
             except (OSError, asyncio.TimeoutError) as exc:
                 return SwarmResult(role, "ERROR", None, str(exc) or "Worker timed out")
             duration = asyncio.get_running_loop().time() - start_time

@@ -151,3 +151,36 @@ Objectives:
 ## 1. Threat Modeling & Vulnerability Surface Matrix
 
 | Vector ID
+
+### [2026-10-21 18:48] Mål: MÍMIR RESEARCH DIRECTIVE: COMPREHENSIVE ARCHITECTURAL & QUANTITATIVE AUDIT OF TRADEBOT
+
+OBJECTIVE:
+Investigate the user's Stockholm stock market trading bot located at 'C:\Users\jonas\code\trade' (package: tradebot). Conduct a rigorous quantitative, algorithmic, and software architecture review to make it significantly better, safer, and more profitable. Deploy exactly 8 specialized micro-agent perspectives across the swarm.
+
+TARGET SYSTEM PROFILE (C:\Users\jonas\code\trade):
+- Target Market: Nasdaq Stockholm (OMXS equities, 'market=STO').
+- Data Ingestion: Yahoo Finance API (fundamentals/quotes) and Nasdaq Nordic API (instruments/key stats) into SQLite ('data/stockholm_prices.db', schema v9).
+- Market Regime Engine ('src/tradebot/core/regime.py'): 5-indicator z-score scoring (Price vs SMA200, SMA50 vs SMA200, 60d/120d momentum, rolling 252d volatility percentile) categorizing into STRONG_BULL, BULL, NEUTRAL, BEAR, STRONG_BEAR.
+- Strategy & Sizing ('src/tradebot/core/portfolio_builder.py'): Tradability predictability scoring, adaptive signals (BUY/HOLD/SELL), Equal Risk Contribution (ERC) / inverse-volatility weighting.
+- Exit Strategies ('src/tradebot/core/exit_signals.py', 'exit_strategy.py'): Chandelier stops (ATR multipliers), regime-based trailing stops mapped to Avanza broker trailing stops ('to_avanza_trailing_stop'), momentum breakdown, portfolio drawdown stops.
+- Risk & Behavioral Metrics ('src/tradebot/core/risk_metrics.py'): Sortino ratio, Herfindahl-Hirschman Index (HHI) concentration, correlation clustering, disposition-effect detection.
+- Software Architecture: 'src/tradebot/ui/cli.py' is currently a 3,600+ line "God File" blending Typer CLI commands, terminal formatting, and domain logic.
+
+THE 8 MANDATORY SPECIALIZED MICRO-AGENT MISSIONS:
+1. [Quantitative-Modeler]: Analyze signal generation in 'regime.py' and 'signals.py'. How can we reduce lag and whipsaw losses from simple SMA50/SMA200 crosses during sudden Stockholm market turnarounds? Evaluate adaptive Kalman filtering, ATR-normalized momentum, and volume-weighted confirmation.
+2. [Market-Microstructure-Analyst]: Evaluate execution friction on the Stockholm exchange (OMXS Small/Mid/Large Cap). How should 'cost_model.py' and 'portfolio_builder.py' handle low-liquidity slippage, wide bid-ask spreads, and Avanza courtage tiers?
+3. [Exit-Strategy-Optimizer]: Review Chandelier/ATR trailing stops and regime exit triggers in 'exit_strategy.py'. How can stops be tuned to avoid getting chopped up in sideways/NEUTRAL regimes while still aggressively capping maximum drawdown in BEAR regimes?
+4. [Portfolio-Risk-Architect]: Evaluate portfolio construction ('portfolio_builder.py') and risk metrics ('risk_metrics.py'). How can the Equal Risk Contribution (ERC) and correlation clustering be hardened against correlation breakdown and cluster collapse during market panics?
+5. [Data-Reliability-Engineer]: Assess data ingestion ('yahoo.py', 'nasdaq.py', 'historical.py'). Identify vulnerabilities to Yahoo/Nasdaq API changes, rate limits, corporate actions (stock splits, spin-offs, dividends), and survivorship bias in historical backtests.
+6. [Software-System-Architect]: Review codebase modularity and design patterns. Detail a concrete refactoring strategy to break down the 3,600-line 'cli.py' "God File" into decoupled command routers, service layers, and reusable formatting helpers.
+7. [Red-Team-Adversary]: Conduct an aggressive adversarial critique. What are the top 5 ways this trading bot will fail, suffer catastrophic drawdowns, or generate false buy/sell signals under realistic market shocks?
+8. [Executive-Portfolio-Strategist]: Synthesize the findings into a high-conviction, prioritized, phased implementation roadmap with concrete code change recommendations for the developer.
+
+- **Huvudinsikt / Pareto-härdad lösning:** # Executive Quantitative & Architectural Blueprint: Tradebot Modernization
+
+This executive synthesis unifies the quantitative, microstructure, exit strategy, portfolio risk, data reliability, architectural, and adversarial audits of `tradebot` (`C:\Users\jonas\code\trade`). The strategy is organized...
+- **Reflektionsnotis:** Adversarial reflection skipped due to worker timeout....
+- **Identifierade fallgropar:**
+  * # Adversarial Vulnerability Audit: Top 5 Catastrophic Failure Modes in `tradebot`
+
+An adversarial review of `tradebot` across ingestion, regime detect

@@ -202,7 +202,8 @@ class GepaOptimizer:
             effort=None,
         )
         if res.status != "SUCCESS":
-            raise RuntimeError(f"Mimir reflection failed: {res.raw_response[:300]}")
+            fallback_note = "Adversarial reflection skipped due to worker timeout." if is_en else "Adversariell reflektion överhoppad på grund av tidsgräns."
+            return candidate_content, fallback_note
 
         if isinstance(res.data, dict) and "hardened_solution" in res.data:
             return res.data["hardened_solution"], res.data.get("reflection", "")

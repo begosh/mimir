@@ -262,18 +262,21 @@ class RecursiveDecomposer:
     into atomic, non-overlapping tasks for micro-agent swarms.
     """
 
-    def __init__(self, swarm: Any, max_depth: int = 3):
+    def __init__(self, swarm: Any, max_depth: int = 3, target_tasks: Optional[int] = None):
         self.swarm = swarm
         self.max_depth = max_depth
+        self.target_tasks = target_tasks
 
     async def decompose_goal(self, goal: str, intelligence_context: str = "", memory_context: str = "") -> TaskGraph:
         graph = TaskGraph(goal=goal)
 
         is_en = is_english_text(goal)
+        task_count_en = f"{self.target_tasks} specialized, non-overlapping atomic tasks" if (self.target_tasks and self.target_tasks >= 6) else "4-6 atomic, non-overlapping tasks"
+        task_count_sv = f"{self.target_tasks} specialiserade, icke-överlappande atomära mikrouppgifter" if (self.target_tasks and self.target_tasks >= 6) else "4-6 brutalt konkreta, atomära mikrouppgifter"
         if is_en:
             decomp_prompt = f"""
             You are Mímir Chief Architect. Your task is to decompose the following objective into
-            4-6 atomic, non-overlapping tasks that specialized micro-agents can solve in parallel.
+            {task_count_en} that specialized micro-agents can solve in parallel.
 
             OBJECTIVE: "{goal}"
 
@@ -309,7 +312,7 @@ class RecursiveDecomposer:
         else:
             decomp_prompt = f"""
             Du är Mímir Chief Architect. Din uppgift är att bryta ned följande mål till
-            4-6 brutalt konkreta, atomära mikrouppgifter som små agenter kan reda ut parallellt.
+            {task_count_sv} som små agenter kan reda ut parallellt.
 
             MÅL: "{goal}"
 
