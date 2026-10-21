@@ -256,3 +256,10 @@ Mímir bridges the gap between deep recursive cognitive orchestration and develo
 ---
 
 ### 1. Non-Interactive CI/CD Runners & Pipe Redirection (`TERM=dumb`
+
+
+### [2026-10-21 21:05] Mål: Windows Harness Subprocess Flashing & Mandatory Phased Execution
+- **Huvudinsikt / Pareto-härdad lösning:** I agentiska miljöer som körs på Windows (t.ex. Antigravity IDE, Cursor, OpenCode) orsakas fönsterfladder inte av Mímirs interna svärmprocesser (vilka döljs via `CREATE_NO_WINDOW` och `STARTUPINFO.SW_HIDE`), utan av att AI-harnesset anropar separata preflight-shellkommandon (`--config-status`, `--configure`, `--check`) där Windows tillfälligt allokerar en `conhost.exe`-konsol. Genom att eliminera onödig sonderingsceremoni och göra den 3-fasiga exekveringsmodellen (`--phase plan` -> `--phase execute` -> `--phase synthesize`) obligatorisk i `SKILL.md`, minimeras externa anrop till exakt ett per fas. Detta ger kontinuerliga milstolpeuppdateringar i chatten (~20s / ~60s / ~30s) utan tysta frysningar eller poppande konsolfönster.
+- **Identifierade fallgropar:**
+  * Låt aldrig monolitiska 3–5 minuters kommandoexempel ligga som standard i `SKILL.md` – LLM-agenter väljer det första kommandot de ser och ignorerar rekommenderade alternativ längre ned.
+  * Kräv aldrig separata preflight-kommandon i etablerade miljöer; skicka parametrarna direkt i fasanropen.
