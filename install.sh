@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # M Í M I R // Agent Skill Installer for Linux / macOS / WSL
-# Installs Mímir into Codex CLI, Antigravity CLI, Claude Code, OpenCode, and skills.sh
+# Installs one shared package with CLI directory links
 # Supports local repo execution and direct curl pipe:
 #   curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --global
 # =============================================================================
@@ -41,4 +41,13 @@ else
     exit 1
 fi
 
-exec "$PY_BIN" "$INSTALLER" "$@"
+if [ -n "$TEMP_DIR" ]; then
+    for arg in "$@"; do
+        if [ "$arg" = "--link" ] || [ "$arg" = "-l" ]; then
+            echo "[!] --link requires a persistent local checkout." >&2
+            exit 1
+        fi
+    done
+fi
+
+"$PY_BIN" "$INSTALLER" "$@"

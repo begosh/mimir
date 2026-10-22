@@ -166,16 +166,32 @@ The Python scout searches public web/arXiv; HTTP workers have no MCP adapter.
 git clone https://github.com/begosh/mimir.git
 cd mimir
 
-# Install dependencies and copy the skill to supported global directories.
+# Install one shared package and link the supported CLI locations to it.
 python scripts/install.py --global
 
 # Or install into a chosen project.
 python scripts/install.py --project /path/to/project
 ```
 
-The installer packages the skill, scripts and prompts for Codex, AGY, Claude
-Code, OpenCode and the shared `.agents/skills` directory. It creates supported
-targets; it does not establish CLI login or certify installed model access.
+The installer keeps one package (skill, scripts, prompts and docs) at
+`~/.agents/skills/mimir`, or `<project>/.agents/skills/mimir` for project installs.
+Other CLI locations point to that package using Windows directory junctions or
+Linux/macOS symlinks. Claude uses `~/.claude/skills/mimir`; AGY uses
+`~/.gemini/antigravity-cli/skills/mimir`; Antigravity uses
+`~/.gemini/antigravity/skills/mimir`. Codex/OpenCode discover shared skills
+directly; compatibility links cover their native skill paths too.
+
+Reinstalling updates the shared package once, and every link sees the update.
+Existing `LEARNINGS.md` is preserved. Replaced copies are moved outside discovery
+to `~/.agents/mimir-install-backups`, or `<project>/.mimir/install-backups`,
+retaining their contents and any separate learned notes. The installer reports
+those backup paths. `--target` chooses CLI links; the shared package is always
+installed. `--link` additionally points the shared package at the source checkout
+for development; that checkout must remain available.
+
+Installation fails visibly if a directory link cannot be created; it does not
+silently create divergent copies. It does not establish CLI login or certify
+installed model access.
 Run `python scripts/install.py --help` for target filtering and other options.
 
 Shell installers are also available:

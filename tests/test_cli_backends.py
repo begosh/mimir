@@ -17,7 +17,7 @@ from backend import (AgySwarmBackend, ClaudeCodeSwarmBackend, CodexSwarmBackend,
                      OpenCodeSwarmBackend, SwarmResult, SwarmTask, create_swarm_backend,
                      disposable_cli_env, claude_research_tools)
 from task_graph import Blackboard, TaskGraph, TaskNode, TaskStatus
-from install import copy_skill_tree, get_project_targets
+from install import install_shared_skill, get_project_targets, shared_skill_path
 import mimir
 from jarvis_memory import JarvisMemory
 from research_scout import IntelligenceBrief, ResearchItem
@@ -240,8 +240,8 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
     def test_installed_skill_is_self_contained_for_each_project_target(self):
         repo = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
+            install_shared_skill(repo, get_project_targets(Path(directory)), shared_skill_path(Path(directory)))
             for name, target in get_project_targets(Path(directory)):
-                copy_skill_tree(repo, target)
                 self.assertTrue((target / "scripts/mimir.py").exists(), name)
                 self.assertTrue((target / "prompts/HARNESS_EXECUTION.md").exists(), name)
 

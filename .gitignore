@@ -38,3 +38,4 @@ desktop.ini
 *.swo
 .serena/
 .mimir/config.json
+.mimir/install-backups/

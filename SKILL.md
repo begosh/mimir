@@ -87,8 +87,10 @@ per-call temporary storage, removed after the call. Temporary isolation is not
 native zero-persistence; see the compatibility reference. Login reuse consumes
 the account's allowance or configured provider charges.
 
-The engine reads/appends `LEARNINGS.md` in its own skill directory. Separate
-copied installations have separate memories. Do not change global CLI configuration
+The engine reads/appends `LEARNINGS.md` in the shared skill directory. CLI skill
+paths link to that package, so they share its learned notes. Project installations
+have their own shared package. Reinstalling preserves existing learned notes.
+Do not change global CLI configuration
 or purge user sessions as part of an investigation.
 
 ## Mode B: Native conversational protocol

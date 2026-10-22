@@ -2,8 +2,8 @@
 .SYNOPSIS
     M Í M I R // Agent Skill Installer for Windows PowerShell
 .DESCRIPTION
-    Installs Mímir into Codex CLI, Antigravity CLI, Claude Code, OpenCode, and skills.sh
-    either globally (~/.codex, ~/.gemini, ~/.agents) or project-locally.
+    Installs one shared Mímir package under .agents/skills and creates directory
+    junctions for the CLI skill locations, globally or project-locally.
 .EXAMPLE
     .\install.ps1 -Global
 .EXAMPLE
@@ -27,6 +27,7 @@ $ErrorActionPreference = "Stop"
 $RepoUrl = "https://github.com/begosh/mimir.git"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path 2>$null
 $TempDir = $null
+$InstallerExitCode = 1
 
 try {
     if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "scripts\install.py"))) {
@@ -35,6 +36,7 @@ try {
         Write-Host "[*] Fetching Mímir repository..." -ForegroundColor Cyan
         $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("mimir_install_" + [System.Guid]::NewGuid().ToString("N"))
         git clone --depth 1 $RepoUrl $TempDir | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not fetch the Mímir repository." }
         $Installer = Join-Path $TempDir "scripts\install.py"
     }
 
@@ -67,6 +69,7 @@ try {
     }
 
     if ($Link) {
+        if ($TempDir) { throw "-Link requires a persistent local checkout; downloaded temporary files cannot be linked." }
         $ArgsList += "--link"
     }
 
@@ -75,9 +78,16 @@ try {
     }
 
     & $PyBin $ArgsList
+    $InstallerExitCode = $LASTEXITCODE
 }
 finally {
     if ($TempDir -and (Test-Path $TempDir)) {
-        Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
+        $ResolvedTempDir = (Resolve-Path -LiteralPath $TempDir).Path
+        $ExpectedTempParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\')
+        if ((Split-Path -Parent $ResolvedTempDir).TrimEnd('\') -eq $ExpectedTempParent -and
+            (Split-Path -Leaf $ResolvedTempDir) -like 'mimir_install_*') {
+            Remove-Item -LiteralPath $ResolvedTempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 }
+exit $InstallerExitCode
