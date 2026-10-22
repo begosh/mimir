@@ -18,6 +18,23 @@ from dataclasses import asdict, dataclass, field
 from mimir_config import is_english_text
 from typing import Any, Dict, List, Optional
 
+
+def public_search_query(text: str) -> str:
+    """Validate an intentionally concise public query before sending it out.
+
+    This guard catches obvious objective/path/credential leakage; callers remain
+    responsible for excluding confidential names and other private information.
+    """
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("A non-empty public search query is required")
+    if len(text) > 240 or "\n" in text or "\r" in text:
+        raise ValueError("Use a single-line public search query of at most 240 characters")
+    if re.search(r"(?i)(?:[a-z]:[\\/]|\\\\|(?:^|\s)(?:[~.]?/|\.\\)|file://)", text):
+        raise ValueError("Local paths must not be sent to public search services")
+    if re.search(r"(?i)(?:password|passwd|secret|token|api[_ -]?key)\s*[:=]|bearer\s+\S+|sk-[a-z0-9_-]{16,}", text):
+        raise ValueError("Credential-shaped text must not be sent to public search services")
+    return text.strip()
+
 try:
     from bs4 import BeautifulSoup
     from curl_cffi import requests as cffi_requests
@@ -43,6 +60,7 @@ class ResearchItem:
     summary: str
     author_or_meta: str = ""
     relevance_score: float = 1.0
+    retrieval_type: str = "search_snippet"
 
     @property
     def source_type(self) -> str:
@@ -54,6 +72,7 @@ class IntelligenceBrief:
     topic: str
     items: List[ResearchItem] = field(default_factory=list)
     distilled_insights: List[str] = field(default_factory=list)
+    retrieval_gaps: List[str] = field(default_factory=list)
 
     @property
     def arxiv_papers(self) -> List[ResearchItem]:
@@ -68,14 +87,16 @@ class IntelligenceBrief:
             "topic": self.topic,
             "items": [asdict(i) for i in self.items],
             "distilled_insights": self.distilled_insights,
+            "retrieval_gaps": self.retrieval_gaps,
         }
 
     def to_compact_markdown(self) -> str:
         is_en = is_english_text(self.topic)
-        header = f"### Dynamic Intelligence Discovery: {self.topic}\n"
+        header = f"### Dynamic Intelligence Discovery: {' '.join(self.topic.split())[:180]}\n"
         lines = [header]
         if not self.items:
             lines.append("_No external data gathered._\n")
+            lines.extend(f"- Retrieval gap: {gap}" for gap in self.retrieval_gaps)
             return "\n".join(lines)
 
         by_channel: Dict[str, List[ResearchItem]] = {}
@@ -85,9 +106,10 @@ class IntelligenceBrief:
         for channel, items in by_channel.items():
             lines.append(f"**[{channel}]:**")
             for it in items[:3]:
-                meta = f" ({it.author_or_meta})" if it.author_or_meta else ""
-                url_part = f" [Länk]({it.url})" if it.url else ""
-                lines.append(f"- **{it.title}**{meta}: {it.summary[:200]}...{url_part}")
+                meta = f" ({it.author_or_meta}; {it.retrieval_type})"
+                url_part = f" [Source]({it.url})" if it.url else ""
+                excerpt = it.summary[:200] + ("..." if len(it.summary) > 200 else "")
+                lines.append(f"- **{it.title}**{meta}: {excerpt}{url_part}")
             lines.append("")
 
         if self.distilled_insights:
@@ -95,6 +117,10 @@ class IntelligenceBrief:
             for ins in self.distilled_insights:
                 lines.append(f"- {ins}")
             lines.append("")
+
+        if self.retrieval_gaps:
+            lines.append("**Retrieval gaps:**")
+            lines.extend(f"- {gap}" for gap in self.retrieval_gaps)
 
         return "\n".join(lines)
 
@@ -108,6 +134,10 @@ class ResearchScout:
 
     def __init__(self, timeout_sec: int = 12):
         self.timeout_sec = timeout_sec
+        self.retrieval_gaps: List[str] = []
+
+    def _gap(self, channel: str, reason: str) -> None:
+        self.retrieval_gaps.append(f"{channel}: {reason}")
 
     def plan_sources_heuristic(self, topic: str, custom_domains: Optional[List[str]] = None) -> List[SourceDirective]:
         """
@@ -220,9 +250,15 @@ class ResearchScout:
 
     def search_arxiv(self, query: str, max_results: int = 3) -> List[ResearchItem]:
         """Queries arXiv's open API."""
+        gaps_before = len(self.retrieval_gaps)
+        try:
+            query = public_search_query(query)
+        except ValueError as exc:
+            self._gap("arXiv", str(exc))
+            return []
         clean_query = re.sub(r"[^\w\s]", " ", query).strip()
         encoded = urllib.parse.quote(clean_query)
-        url = f"http://export.arxiv.org/api/query?search_query=all:{encoded}&start=0&max_results={max_results}&sortBy=relevance&sortOrder=descending"
+        url = f"https://export.arxiv.org/api/query?search_query=all:{encoded}&start=0&max_results={max_results}&sortBy=relevance&sortOrder=descending"
 
         items = []
         try:
@@ -254,10 +290,14 @@ class ResearchScout:
                         url=paper_url,
                         summary=summary,
                         author_or_meta=f"Preprint ({published})",
+                        retrieval_type="preprint_abstract",
                     )
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            self._gap("arXiv", f"Retrieval failed ({type(exc).__name__})")
+
+        if not items and len(self.retrieval_gaps) == gaps_before:
+            self._gap("arXiv", "No results returned; coverage remains unconfirmed")
 
         return items
 
@@ -267,9 +307,16 @@ class ResearchScout:
         Supports targeting ANY website or open web.
         """
         if not HAS_CURL_CFFI:
+            self._gap(directive.channel_name, "Web retrieval dependencies are unavailable")
             return []
 
-        search_term = directive.search_query
+        try:
+            search_term = public_search_query(directive.search_query)
+            if directive.target_site and not re.fullmatch(r"[a-zA-Z0-9.-]+", directive.target_site):
+                raise ValueError("Target site must be a public domain name")
+        except ValueError as exc:
+            self._gap(directive.channel_name, str(exc))
+            return []
         if directive.target_site:
             search_term = f"site:{directive.target_site} {directive.search_query}"
 
@@ -284,6 +331,9 @@ class ResearchScout:
                 timeout=self.timeout_sec,
                 headers={"Accept-Language": "en-US,en;q=0.9,sv;q=0.8"},
             )
+            if res.status_code != 200:
+                self._gap(directive.channel_name, f"Search returned HTTP {res.status_code}")
+                return []
             if res.status_code == 200:
                 soup = BeautifulSoup(res.text, "html.parser")
                 results = soup.select(".result")
@@ -297,9 +347,16 @@ class ResearchScout:
                         raw_url = title_a.get("href", "")
                         match = re.search(r"uddg=([^&]+)", raw_url)
                         actual_url = urllib.parse.unquote(match.group(1)) if match else raw_url
+                        if urllib.parse.urlparse(actual_url).scheme not in ("http", "https"):
+                            continue
                         snippet = snippet_div.get_text(strip=True)
 
-                        site_label = directive.target_site or urllib.parse.urlparse(actual_url).netloc
+                        site_label = urllib.parse.urlparse(actual_url).netloc
+                        if directive.target_site and not (
+                            site_label.casefold() == directive.target_site.casefold() or
+                            site_label.casefold().endswith("." + directive.target_site.casefold())
+                        ):
+                            continue
                         items.append(
                             ResearchItem(
                                 channel=directive.channel_name,
@@ -309,8 +366,11 @@ class ResearchScout:
                                 author_or_meta=site_label,
                             )
                         )
-        except Exception:
-            pass
+        except Exception as exc:
+            self._gap(directive.channel_name, f"Retrieval failed ({type(exc).__name__})")
+
+        if not items:
+            self._gap(directive.channel_name, "No usable search results; possible empty results or challenge page")
 
         return items
 
@@ -319,16 +379,26 @@ class ResearchScout:
         topic: str,
         custom_domains: Optional[List[str]] = None,
         swarm: Optional[Any] = None,
+        search_query: Optional[str] = None,
     ) -> IntelligenceBrief:
         brief = IntelligenceBrief(topic=topic)
-        directives = self.plan_sources_heuristic(topic, custom_domains=custom_domains)
+        self.retrieval_gaps = []
+        try:
+            query = public_search_query(search_query if search_query is not None else topic)
+        except ValueError as exc:
+            brief.retrieval_gaps.append(f"Public scout skipped: {exc}")
+            return brief
+        directives = self.plan_sources_heuristic(query, custom_domains=custom_domains)
 
         for d in directives:
             if d.engine == "arxiv":
                 papers = self.search_arxiv(d.search_query, max_results=2)
                 brief.items.extend(papers)
-            else:
+            elif d.engine == "web":
                 web_items = self.search_web_directive(d, max_results=2)
                 brief.items.extend(web_items)
+            else:
+                self._gap(d.channel_name, f"Unsupported search engine: {d.engine}")
 
+        brief.retrieval_gaps = list(self.retrieval_gaps)
         return brief

@@ -7,6 +7,7 @@ __pycache__/
 # Environments
 .env
 .venv
+.venv-research/
 env/
 venv/
 ENV/
@@ -39,3 +40,13 @@ desktop.ini
 .serena/
 .mimir/config.json
 .mimir/install-backups/
+
+.mimir/runs/
+.mimir/learning-candidates.jsonl
+.mimir/learning-candidates.jsonl.lock
+
+# Local MCP launch configuration (absolute interpreter/workspace paths)
+.codex/config.toml
+.mcp.json
+.agents/mcp_config.json
+opencode.jsonc

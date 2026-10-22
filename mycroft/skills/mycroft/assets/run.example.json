@@ -1,0 +1,25 @@
+{
+  "schema_version": "mycroft.run.v1",
+  "package_version": "0.1.0",
+  "run_id": "example-only",
+  "status": "planned",
+  "objective": "Replace with the user's actual objective",
+  "mode": "review",
+  "provider": "inherited",
+  "model": null,
+  "effort": null,
+  "memory": "read",
+  "instruction_manifest": null,
+  "source_scope": [],
+  "tool_scope": [],
+  "capabilities": {"native_spawn": null, "file_writes": null, "worker_retrieval": null},
+  "limits": {"max_tasks": 4, "max_dispatches": 8, "max_concurrency": 2, "max_depth": 1, "max_rounds": 2, "max_input_chars": 48000, "max_output_chars": 16000},
+  "enforcement": {"dispatches": "observable_dispatch", "tokens": "unavailable", "time": "unavailable"},
+  "dispatches_used": 0,
+  "tasks": [
+    {"id": "t-evidence", "role": "mycroft-investigator", "depends_on": [], "required_evidence": true, "depth": 1, "status": "planned", "attempts": []},
+    {"id": "t-alternatives", "role": "mycroft-alternatives", "depends_on": [], "required_evidence": true, "depth": 1, "status": "planned", "attempts": []},
+    {"id": "t-critic", "role": "mycroft-critic", "depends_on": ["t-evidence", "t-alternatives"], "required_evidence": true, "depth": 1, "status": "planned", "attempts": []}
+  ],
+  "gaps": []
+}

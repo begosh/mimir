@@ -9,6 +9,7 @@ import stat
 import subprocess
 import sys
 import uuid
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
@@ -18,7 +19,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 SKILL_NAME = "mimir"
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PACKAGE_FILES = ("SKILL.md", "README.md", "LEARNINGS.md", "requirements.txt", "LICENSE", ".gitignore")
+PACKAGE_FILES = ("SKILL.md", "README.md", "LEARNINGS.md", "requirements.txt", "requirements-workers.txt", "requirements-research.txt", "LICENSE", ".gitignore")
 PACKAGE_DIRS = ("scripts", "prompts", "docs")
 
 
@@ -67,6 +68,8 @@ def _validate_destination(path: Path) -> Path:
     # its target. Only the explicitly named skill directory may be moved.
     if path.name != SKILL_NAME or path.parent.name != "skills":
         raise ValueError(f"Expected a skills/{SKILL_NAME} destination: {path}")
+    if _is_link(path.parent):
+        raise ValueError(f"Skill discovery directory must not be a link: {path.parent}")
     return path.parent.resolve() / path.name
 
 
@@ -138,42 +141,81 @@ def link_skill_tree(source: Path, destination: Path, backup_root: Path | None = 
                 staging.rmdir()  # removes a junction, never its target
 
 
-def copy_skill_tree(src: Path, dst: Path, use_link: bool = False) -> None:
-    """Refresh the shared package while retaining its accumulated learnings."""
+def _replace_package(source: Path, destination: Path) -> None:
+    """Retry temporary Windows deny-delete handles without widening targets."""
+    for attempt in range(5):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if os.name != "nt" or attempt == 4:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
+def copy_skill_tree(src: Path, dst: Path, use_link: bool = False,
+                    backup_root: Path | None = None) -> Path | None:
+    """Stage a clean package, preserve notes and restore the old copy on failure."""
     src = src.resolve(strict=True)
     dst = _validate_destination(dst)
     if not (src / "SKILL.md").is_file():
         raise ValueError(f"Source has no SKILL.md: {src}")
     if use_link:
-        link_skill_tree(src, dst)
-        return
+        return link_skill_tree(src, dst, backup_root)
     if dst.exists() and dst.resolve() == src and not _is_link(dst):
         return
     if dst in src.parents:
         raise ValueError("The installed package cannot contain its source")
-    if _is_link(dst):
-        backup = _backup_path(dst)
-        backup.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(dst, backup)
-        dst.mkdir(parents=True)
-        if (backup / "LEARNINGS.md").is_file():
-            shutil.copy2(backup / "LEARNINGS.md", dst / "LEARNINGS.md")
-    dst.mkdir(parents=True, exist_ok=True)
-    for name in PACKAGE_FILES:
-        if name == "LEARNINGS.md" and (dst / name).exists():
-            continue
-        if (src / name).is_file():
-            shutil.copy2(src / name, dst / name)
-    for name in PACKAGE_DIRS:
-        if (src / name).is_dir():
-            shutil.copytree(src / name, dst / name, dirs_exist_ok=True,
-                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    for name in (*PACKAGE_FILES, *PACKAGE_DIRS):
+        source_entry = src / name
+        entries = [source_entry]
+        if source_entry.is_dir() and not _is_link(source_entry):
+            entries.extend(source_entry.rglob("*"))
+        if any(_is_link(entry) for entry in entries):
+            raise ValueError(f"Package resources must not contain links: {source_entry}")
+    # Read notes through an existing top-level developer link deliberately,
+    # but never through a nested link that could point at unrelated user files.
+    existing_notes = dst / "LEARNINGS.md"
+    if _is_link(existing_notes):
+        raise ValueError(f"Learning file must not be a link: {existing_notes}")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    staging = dst.parent / f".mimir-copy-{uuid.uuid4().hex}"
+    backup = None
+    try:
+        staging.mkdir()
+        for name in PACKAGE_FILES:
+            resource = existing_notes if name == "LEARNINGS.md" and existing_notes.is_file() else src / name
+            if resource.is_file():
+                shutil.copy2(resource, staging / name)
+        for name in PACKAGE_DIRS:
+            if (src / name).is_dir():
+                shutil.copytree(src / name, staging / name,
+                                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        if os.path.lexists(dst):
+            backup = _backup_path(dst, backup_root)
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(dst, backup)
+        try:
+            _replace_package(staging, dst)
+        except OSError:
+            if backup is not None:
+                os.replace(backup, dst)
+            raise
+    finally:
+        if staging.exists():
+            # Verify the absolute staging target before any recursive deletion.
+            if _is_link(staging) or staging.resolve().parent != dst.parent.resolve():
+                raise ValueError(f"Unsafe package staging cleanup path: {staging}")
+            shutil.rmtree(staging)
+    return backup
 
 
 def install_shared_skill(src: Path, targets: List[Tuple[str, Path]], canonical: Path,
                          use_link: bool = False, backup_root: Path | None = None) -> List[Tuple[Path, Path]]:
-    copy_skill_tree(src, canonical, use_link=use_link)
+    canonical_backup = copy_skill_tree(src, canonical, use_link=use_link, backup_root=backup_root)
     print(f"[OK] Shared Mímir package: {canonical}")
+    if canonical_backup:
+        print(f"  Previous shared package preserved: {canonical_backup}")
     backups = []
     for name, destination in targets:
         if destination.absolute() == canonical.absolute():
@@ -186,8 +228,8 @@ def install_shared_skill(src: Path, targets: List[Tuple[str, Path]], canonical: 
     return backups
 
 
-def install_dependencies() -> bool:
-    requirements = REPO_ROOT / "requirements.txt"
+def install_dependencies(workers: bool = False, research: bool = False) -> bool:
+    requirements = REPO_ROOT / ("requirements-research.txt" if research else "requirements-workers.txt" if workers else "requirements.txt")
     if not requirements.exists():
         return True
     return subprocess.call([sys.executable, "-m", "pip", "install", "-r", str(requirements)]) == 0
@@ -202,6 +244,9 @@ def main() -> int:
                         default="all", help="Choose CLI links; the shared package is always installed")
     parser.add_argument("--link", "-l", action="store_true",
                         help="Developer mode: also link the shared package to this source checkout")
+    parser.add_argument("--workers", action="store_true", help="Install SDK/server and MCP dependencies (default)")
+    parser.add_argument("--base-only", action="store_true", help="Install base dependencies only for explicitly selected legacy/HTTP workers")
+    parser.add_argument("--research", action="store_true", help="Install pinned optional DSPy, GEPA and Deno research dependencies")
     parser.add_argument("--skip-pip", action="store_true", help="Skip Python dependency installation")
     args = parser.parse_args()
     project = Path(args.project).resolve() if args.project is not None else None
@@ -211,7 +256,12 @@ def main() -> int:
         word = "agent skills" if args.target == "agents" else args.target
         entries = [entry for entry in entries if word in entry[0].lower()]
     try:
-        if not args.skip_pip and not install_dependencies():
+        if not entries:
+            raise ValueError(
+                f"Target '{args.target}' is unsupported for project installation. "
+                "Choose agents, codex, claude or opencode, or install this target globally."
+            )
+        if not args.skip_pip and not install_dependencies(workers=not args.base_only, research=args.research):
             raise RuntimeError("Python dependency installation failed")
         install_shared_skill(REPO_ROOT, entries, canonical, use_link=args.link,
                              backup_root=(project / ".mimir/install-backups") if project else None)

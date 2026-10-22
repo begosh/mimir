@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mycroft Corpus"
+  short_description: "Bounded document analysis with source-span evidence"
+  default_prompt: "Use $mycroft-corpus to investigate the supplied documents with bounded native delegation."

@@ -1,21 +1,30 @@
 """
 scripts/jev_gate.py
 System 1 Fast Decision Model and Joint Expected Value (JEV) Evaluator.
-Inspired by TypeSafe AI's Jev and decision theory. Provides sub-second typed
-calibrated decisions, DAG pruning via JEV, and anti-hallucination gating.
+Inspired by TypeSafe AI's Jev and decision theory. Provides model-estimated
+decision confidence, heuristic DAG pruning, and evidence screening.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
 import math
-import os
-import re
+import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Tuple
 
-from backend import BaseSwarmBackend, SwarmResult
+
+def _unit_number(value: Any, name: str) -> float:
+    """Accept schema numbers only; NaN, infinity and coercions are invalid."""
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or not 0 <= value <= 1):
+        raise ValueError(f"{name} must be a finite number within [0, 1]")
+    return float(value)
+
+
+def _successful_data(result: Any) -> dict:
+    if result.status != "SUCCESS" or not isinstance(result.data, dict):
+        raise ValueError("Decision worker failed or returned an invalid JSON object")
+    return result.data
 
 
 @dataclass
@@ -29,13 +38,13 @@ class JevDecision:
 class JevDecisionGate:
     """
     Implements System 1 decision gating and Joint Expected Value (JEV) computation.
-    Evaluates application state to make typed, bounded decisions without the latency
-    and token overhead of generative text models.
+    Evaluates state using worker calls. Confidence is model-estimated and has
+    not been statistically calibrated; screening does not verify source facts.
     """
 
     def __init__(self, swarm: Any, confidence_threshold: float = 0.70):
         self.swarm = swarm
-        self.confidence_threshold = confidence_threshold
+        self.confidence_threshold = _unit_number(confidence_threshold, "Confidence threshold")
 
     async def evaluate_choice(
         self,
@@ -43,6 +52,8 @@ class JevDecisionGate:
         question: str,
         choices: List[str],
     ) -> JevDecision:
+        if not isinstance(choices, list) or not choices or any(not isinstance(c, str) or not c.strip() for c in choices):
+            raise ValueError("Choices must be a nonempty list of strings")
         schema = {
             "type": "object",
             "required": ["choice", "confidence"],
@@ -69,15 +80,11 @@ class JevDecisionGate:
             json_schema=schema,
         )
 
-        chosen = choices[0]
-        prob = 0.75
-
-        if isinstance(res.data, dict):
-            candidate = res.data.get("choice")
-            if candidate in choices:
-                chosen = candidate
-            prob = float(res.data.get("confidence", 0.75))
-            prob = max(0.0, min(1.0, prob))
+        data = _successful_data(res)
+        chosen = data.get("choice")
+        if chosen not in choices:
+            raise ValueError("Decision worker selected an unsupported choice")
+        prob = _unit_number(data.get("confidence"), "Confidence")
 
         return JevDecision(
             decision=chosen,
@@ -93,8 +100,9 @@ class JevDecisionGate:
         parent_dependencies: List[str],
     ) -> float:
         """
-        Computes the Joint Expected Value (JEV) for a prospective DAG node:
-        JEV = P(Critical Impact) * Estimated Information Gain - Computational Overhead Penalty
+        Computes a heuristic importance score for a prospective DAG node:
+        criticality * (1 - 0.5 * redundancy_penalty).
+        Inputs are worker estimates; this is not measured information gain.
         Returns a score in [0.0, 1.0].
         """
         schema = {
@@ -110,7 +118,7 @@ class JevDecisionGate:
         JEV EVALUATION:
         OVERALL OBJECTIVE: "{goal}"
         SUBTASK: "{task_title}"
-        INSTRUCTION: "{task_prompt[:500]}"
+        INSTRUCTION: "{task_prompt}"
         DEPENDENCIES: {parent_dependencies}
 
         TASK:
@@ -127,15 +135,11 @@ class JevDecisionGate:
             json_schema=schema,
         )
 
-        criticality = 0.8
-        redundancy = 0.2
+        data = _successful_data(res)
+        criticality = _unit_number(data.get("criticality"), "Criticality")
+        redundancy = _unit_number(data.get("redundancy_penalty"), "Redundancy penalty")
 
-        if isinstance(res.data, dict):
-            criticality = float(res.data.get("criticality", 0.8))
-            redundancy = float(res.data.get("redundancy_penalty", 0.2))
-
-        net_jev = round(criticality * (1.0 - 0.5 * redundancy), 2)
-        return max(0.05, min(1.0, net_jev))
+        return criticality * (1.0 - 0.5 * redundancy)
 
     async def screen_evidence_contract(
         self,
@@ -143,7 +147,8 @@ class JevDecisionGate:
         result_payload: Any,
         raw_evidence_hash: str,
     ) -> Tuple[bool, float, str]:
-        payload_str = str(result_payload)[:800]
+        # Review the complete payload. A prefix review cannot approve unseen claims.
+        payload_str = json.dumps(result_payload, ensure_ascii=False) if isinstance(result_payload, (dict, list)) else str(result_payload)
         schema = {
             "type": "object",
             "required": ["decision", "confidence"],
@@ -161,7 +166,9 @@ class JevDecisionGate:
         {payload_str}
 
         QUESTION:
-        Is this result factual, logically coherent, and free from obvious hallucinations?
+        Screen this result for logical coherence and obvious unsupported assertions.
+        The hash establishes output identity only; it is not factual verification.
+        Treat missing source evidence or retrieval gaps as uncertainty.
         Choose:
         - "APPROVE": Result is solid and can be committed directly to Blackboard.
         - "AUDIT_REQUIRED": Uncertain or borderline; requires mandatory Red-Team review.
@@ -177,12 +184,14 @@ class JevDecisionGate:
             json_schema=schema,
         )
 
-        decision = "APPROVE"
-        confidence = 0.85
-
-        if isinstance(res.data, dict):
-            decision = res.data.get("decision", "APPROVE")
-            confidence = float(res.data.get("confidence", 0.85))
+        try:
+            data = _successful_data(res)
+            decision = data.get("decision")
+            if decision not in {"APPROVE", "AUDIT_REQUIRED", "REJECT"}:
+                raise ValueError("Unsupported evidence screening decision")
+            confidence = _unit_number(data.get("confidence"), "Confidence")
+        except (ValueError, TypeError):
+            return False, 0.0, "AUDIT_REQUIRED"
 
         is_approved = (decision == "APPROVE") and (confidence >= self.confidence_threshold)
         return is_approved, confidence, decision

@@ -19,17 +19,23 @@ param(
     [ValidateSet("all", "codex", "antigravity", "claude", "opencode", "agents")]
     [string]$Target = "all",
     [switch]$Link,
+    [switch]$Research,
     [switch]$SkipPip
 )
 
 $ErrorActionPreference = "Stop"
 
 $RepoUrl = "https://github.com/begosh/mimir.git"
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path 2>$null
+$ScriptDir = $null
 $TempDir = $null
 $InstallerExitCode = 1
 
 try {
+    # Invoke-Expression of downloaded script text has no command file path.
+    # Resolve local execution only when a path exists, within failure handling.
+    if ($MyInvocation.MyCommand.Path) {
+        $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
     if ($ScriptDir -and (Test-Path (Join-Path $ScriptDir "scripts\install.py"))) {
         $Installer = Join-Path $ScriptDir "scripts\install.py"
     } else {
@@ -57,6 +63,7 @@ try {
     }
 
     $ArgsList = @($Installer)
+    if ($Research) { $ArgsList += "--research" }
 
     if ($Project) {
         $ArgsList += @("--project", $Project)

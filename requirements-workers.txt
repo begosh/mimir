@@ -1,0 +1,7 @@
+# Supported integration versions verified against their primary sources.
+-r requirements.txt
+openai-codex==0.163.0
+claude-agent-sdk==0.2.172
+httpx==0.28.1
+jsonschema==4.26.0
+mcp==2.3.0

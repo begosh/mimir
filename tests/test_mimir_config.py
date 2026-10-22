@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-import mimir
+import engine as mimir
 from mimir_config import (ConfigurationRequired, config_path, config_status,
                           configure, load_config, resolve_execution, validate)
 
@@ -112,7 +112,7 @@ class ProjectConfiguration(unittest.TestCase):
         self.assertEqual(load_config(self.path)["model"], "provider/model")
 
     def test_setup_commands_work_without_calls_or_learning(self):
-        command = [sys.executable, "-B", str(Path(mimir.__file__))]
+        command = [sys.executable, "-B", str(Path(mimir.__file__).with_name("mimir.py"))]
         process_env = {**os.environ, "SYSTEMROOT": os.environ.get("SYSTEMROOT", "C:\\Windows")}
         result = subprocess.run(command + ["--config-status", "--host", "codex", "--host-model", "gpt-6.1-sol"],
                                 cwd=self.root, env=process_env, capture_output=True, text=True, encoding="utf-8", timeout=20)

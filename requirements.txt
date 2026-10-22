@@ -2,6 +2,7 @@
 rich>=13.0.0
 beautifulsoup4>=4.12.0
 curl_cffi>=0.7.0
+tomli>=2.0.1; python_version < "3.11"
 
 # Optional: Needed only if running via direct Python API clients instead of CLI/REST
 # openai>=1.0.0

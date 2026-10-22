@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mycroft"
+  short_description: "Evidence-led investigation with native subagents"
+  default_prompt: "Use $mycroft to investigate this question with native specialists and source-linked critique."

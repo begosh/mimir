@@ -1,0 +1,22 @@
+{
+  "schema_version": "mycroft.corpus.v1",
+  "run_id": "example-only",
+  "sources": [
+    {
+      "id": "corpus:document-1:revision-1",
+      "locator": "evidence/document-1.md",
+      "revision": null,
+      "retrieval_type": "local_file",
+      "retrieved_at": null,
+      "content_identity": null,
+      "length": null,
+      "length_unit": "characters",
+      "partitions": [
+        {"span": "Replace with a measured source span", "state": "unread", "assigned_task_ids": []}
+      ],
+      "limitations": []
+    }
+  ],
+  "missing_sources": [],
+  "gaps": []
+}

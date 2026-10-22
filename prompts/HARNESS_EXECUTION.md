@@ -1,8 +1,26 @@
+# Shared engine and supported transports
+
+The connected Mímir MCP is the skill's execution route. It exposes start/status/
+cancel/result/diagnostics over the same `scripts/engine.py` used by the terminal adapter.
+New worker runs use Codex/Claude SDKs and a private OpenCode HTTP server; AGY
+retains its cached-login CLI. See [current integration contract](../docs/INTEGRATION.md)
+and [primary-source research](../docs/INTEGRATION_RESEARCH_2026-10-22.md).
+
+The CLI contracts and dated observations below describe the explicit legacy
+`--worker-transport cli` path. They do not certify the new SDK/server adapters.
+Old checkpoints retain CLI transport unless explicitly overridden. OS leases
+now release on process death; never remove an active lock file. SDK/native worker
+permissions and authentication are separate from inbound host MCP permissions.
+
 # CLI worker compatibility
 
 The skill invokes the Python engine through the host's shell tool. The engine
 uses `BaseSwarmBackend.spawn` / `parallel` / `execute_graph` across adapters.
 The objective and blackboard carry context; the host conversation is not resumed.
+The current checkout rejects invalid graphs, failed screening results,
+empty/truncated worker output and invalid reflection envelopes. Completion events
+are emitted per worker. These are regression-tested contracts; local live
+observations below identify the versions and paths actually exercised.
 
 | Backend | Worker call | Session policy | Model / effort |
 | --- | --- | --- | --- |
@@ -42,7 +60,8 @@ plugins remain subject to their own compatibility with disposable storage.
 Inline worker permissions default to deny and permit read/glob/grep/webfetch,
 websearch and `*_ask_work_iq`. Preflight resolves native permissions through
 `opencode debug config`; restrictive native rules follow the query allowlist
-so exact denies retain precedence. Explicit inline per-tool choices are retained.
+so exact denies retain precedence. Inline read/search restrictions are retained;
+mutation tools remain denied even when native or inline configuration allows them.
 Sharing and auto-update are disabled. Choose a supported economical variant instead of assuming low works
 on every model. OpenCode 1.19.3 has been checked locally as described below.
 Its `--no-replay` option disables mini-interface history rendering on resume/resize;
@@ -57,6 +76,10 @@ native MCP configuration (no `--strict-mcp-config`) and allows the specific
 `ask_work_iq` operation under configured server names, alongside built-in
 read/search tools; existing deny rules still apply under `dontAsk` mode.
 Other configured MCP tools require appropriate native permissions.
+
+Codex's filesystem read-only sandbox does not impose an MCP mutation allowlist;
+native MCP permissions still apply. The worker's read/query instruction is
+guidance and does not independently enforce remote-operation restrictions.
 
 All four CLI workers receive guidance to use Work IQ for internal M365 evidence,
 prefer primary sources for public questions, and preserve source URLs, dates and
@@ -94,6 +117,16 @@ execution. Authentication reuse still consumes allowance or provider charges.
   Fix the local CLI login before using that backend.
 - Codex preflight passed with an explicitly selected mini model; the live probe
   hit its 45-second timeout. Successful live execution remains unverified.
+- **2026-10-22 update:** Codex CLI 0.163.0 with `azure_headroom`,
+  `gpt-6.1-sol` and low effort completed planning, six-task execution and
+  schema-constrained reflection/report generation in three phase commands.
+  The host's environment snapshot initially lacked the configured provider key;
+  importing the existing Windows user environment into child invocations fixed
+  that prerequisite. The original 180-second execution deadline timed out;
+  the successful retry used 600 seconds. One worker was rerun after embedded
+  JSON extraction discarded its prose; parsing now preserves mixed prose.
+  An invalid reflection structure failed visibly before a schema-constrained
+  retry succeeded. These findings qualify this account/provider/run only.
 - OpenCode 1.19.3 preflight now passes. `debug paths` confirms all home/XDG/temp
   paths resolve inside disposable storage. A live `opencode/minimax-m3.1-flash-free`
   worker with effort `none` returned the expected JSON in 32.7 seconds; a read-only
@@ -108,12 +141,15 @@ Use `--progress jsonl` to emit one flushed JSON object per execution event on
 stdout. The default terminal mode retains Rich panels and tables. Both modes run
 the same Python pipeline; no extra model calls are made for progress summaries.
 
-Events include `run_started`, `worker_settings`, `phase_started`,
+Events include `run_started`, `worker_research_tools`, `phase_started`,
+`scout_querying`, `dag_decomposing`, `run_waiting`,
 `research_completed` / `research_skipped`, `tasks_pruned`, `graph_ready`,
 `task_submitted`, `task_completed` / `task_failed`, `graph_incomplete`,
-`critique_collected`, `reflection_completed`, and `run_completed` / `run_failed` /
+`plan_completed`, `execute_completed`, `critique_collected`, `reflection_started`,
+`reflection_completed`, `synthesis_started`, and `run_completed` / `run_failed` /
 `run_cancelled`. Every event has schema_version, a monotonic sequence, and elapsed
-seconds. Completion includes artifact paths; successful task/critique/reflection
+seconds. Sequence restarts at 1 for each discrete phase process, so deduplicate
+by phase invocation and sequence. Completion includes artifact paths; successful task/critique/reflection
 events include bounded excerpts from returned outputs. No private model reasoning
 or raw objective/task prompts are requested or streamed.
 
@@ -121,20 +157,39 @@ or raw objective/task prompts are requested or streamed.
 model request is already active. A quiet period means no event has arrived, not
 proof of continued progress. Host assistants should summarize selected events,
 avoid duplicates by sequence, poll their process tool, and state failures truthfully.
+`run_waiting` is emitted about every 15 seconds while the event loop is alive.
+It names the current phase and cumulative submitted/completed/failed task counts.
+It proves process liveness and waiting, not new findings or worker token activity.
+Scouting runs in a thread so synchronous source requests do not block this signal.
+Task results and finish events are recorded as each worker returns. The
+dependency tier barrier remains in place; queued tasks can wait for a concurrency
+slot. An unchanged completion count means no new result has been recorded.
+
+For Codex, launch with `exec_command` and a short yield, then poll the returned
+process session with `write_stdin` every 10–20 seconds. If these tools are wrapped
+in `functions.exec`, yield promptly and resume the exec cell with `functions.wait`
+when needed; keep its cell ID distinct from the process session ID. After reading
+events, send a concise **commentary** message to the user: tool stdout by itself
+does not fulfill the chat update requirement. Group worker events, relay each
+phase transition, and give a truthful waiting update during long phases. Use
+Mímir's restrained Norse voice as defined in `SKILL.md`.
+
 Delivery timing depends on the host's shell-output/polling support. This is engine
-progress streaming, not token-by-token streaming from child CLI processes.
+progress streaming, not token-by-token streaming from child CLI processes. Output
+hashes establish identity, not factual verification. Await the phase's completion
+event and successful process exit before launching the next discrete phase.
 
 ## Configuration
 
-The host checks `--config-status --host <known-host>` before the first project
-investigation; `--host-model <known-model>` supplies a model suggestion without
-choosing or saving it. For Codex, propose the known host model at low worker
-effort. Name the host model/effort and proposed worker model/effort in the setup
-question, with another model or HTTP access as alternatives. An existing
-explicit choice in the conversation counts as agreement. Discovery itself
-never saves or starts a run.
+In established harnesses, the host passes agreed backend/model/effort flags
+directly to each phase. CLI checks happen inside the engine; no separate setup
+command is required. Use `--config-status` for manual setup or troubleshooting.
+Propose the known host model at low worker effort when supported; if the exact
+host model is unavailable, disclose that instead of inventing it. A conversation
+choice or saved profile counts as agreement and is reused. Do not switch
+providers silently when a worker fails.
 
-After agreement, `--configure --backend <choice> --model <model> --effort <effort>`
+If the user asks to remember the choice, `--configure --backend <choice> --model <model> --effort <effort>`
 saves `.mimir/config.json` at the nearest Git root (current directory outside
 Git). Every installed skill copy uses that project profile. It stores no keys,
 login files or conversation history. A saved choice is reused even when another
@@ -143,7 +198,10 @@ when the choice is unclear or the selected path fails preflight/authentication;
 never switch providers silently.
 
 Execution precedence is explicit arguments, environment, then the matching
-saved backend profile. Environment overrides include:
+phase checkpoint when resuming, then the saved backend profile. A resume keeps
+the planned output path, timeout and concurrency unless explicitly overridden.
+Execute requires a planned checkpoint; synthesis requires all planned results.
+Environment overrides include:
 
 ```text
 MIMIR_AGY_MODEL=gemini-3.8-flash-low

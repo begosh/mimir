@@ -22,12 +22,15 @@ def main():
     parser.add_argument("question", type=str, help="Den komplexa frågan, strategin eller optimeringsmålet.")
     parser.add_argument("--output", "-o", type=str, default="artifacts/mimir_artifact.json", help="Utdatasökväg för rapporten.")
     parser.add_argument("--backend", "-b", type=str, default=None, choices=["auto", "agy", "codex", "claude", "opencode", "openai", "anthropic", "ollama"], help="Backend override; otherwise use saved project profile")
+    parser.add_argument("--worker-transport", choices=["native", "cli"], default=None)
     parser.add_argument("--effort", default=None, help="Worker effort or OpenCode variant")
     parser.add_argument("--worker-timeout", type=float, default=180, help="Timeout per CLI call in seconds")
     parser.add_argument("--concurrency", type=int, default=4, help="Maximum concurrent workers")
     parser.add_argument("--progress", choices=["terminal", "jsonl"], default="terminal", help="Progress display format")
     parser.add_argument("--model", "-m", type=str, default=None, help="Modell för mikromodeller.")
     parser.add_argument("--skip-web", action="store_true", help="Skip external web scouting")
+    parser.add_argument("--search-query", help="Concise public query independent of private objective")
+    parser.add_argument("--state-file", default="artifacts/mimir_state.json", help="Checkpoint path")
     parser.add_argument("--depth", type=int, default=2, help="Max rekursionsdjup.")
     parser.add_argument("--sources", "-s", type=str, default=None, help="Kommaseparerad lista med specifika källdomäner.")
     parser.add_argument("--no-jev", action="store_true", help="Inaktivera JEV-optimering.")
@@ -51,6 +54,9 @@ def main():
         worker_timeout=args.worker_timeout,
         max_concurrency=args.concurrency,
         progress_format=args.progress,
+        search_query=args.search_query,
+        state_file=args.state_file,
+        worker_transport=args.worker_transport,
     ))
 
 

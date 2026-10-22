@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-import mimir
+import engine as mimir
 from backend import ClaudeCodeSwarmBackend, SwarmResult
 from jarvis_memory import JarvisMemory
 from task_graph import TaskGraph, TaskNode

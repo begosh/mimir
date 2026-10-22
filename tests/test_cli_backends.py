@@ -18,7 +18,7 @@ from backend import (AgySwarmBackend, ClaudeCodeSwarmBackend, CodexSwarmBackend,
                      disposable_cli_env, claude_research_tools)
 from task_graph import Blackboard, TaskGraph, TaskNode, TaskStatus
 from install import install_shared_skill, get_project_targets, shared_skill_path
-import mimir
+import engine as mimir
 from jarvis_memory import JarvisMemory
 from research_scout import IntelligenceBrief, ResearchItem
 
@@ -232,7 +232,7 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
 
     def test_factory_config_and_cli_only_discovery(self):
         with patch.dict(os.environ, {"MIMIR_BACKEND": "claude", "MIMIR_CLAUDE_MODEL": "haiku", "MIMIR_EFFORT": "low"}, clear=True), patch("shutil.which", return_value="claude"):
-            self.assertIsInstance(create_swarm_backend("auto"), ClaudeCodeSwarmBackend)
+            self.assertIsInstance(create_swarm_backend("auto", worker_transport="cli"), ClaudeCodeSwarmBackend)
             self.assertIsInstance(create_swarm_backend("anthropic"), __import__("backend").AnthropicSwarmBackend)
         with self.assertRaises(ValueError):
             OpenCodeSwarmBackend(opencode_path="opencode")
@@ -277,16 +277,17 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
             with patch.object(mimir, "create_swarm_backend", return_value=backend), patch.object(mimir, "JarvisMemory", return_value=memory), redirect_stdout(progress):
                 await mimir.run_mimir("Design with required constraint", str(report), backend="claude", skip_web=True, enable_jev=False, progress_format="jsonl")
             artifact = json.loads(report.with_suffix(".json").read_text(encoding="utf-8"))
-            self.assertEqual(len(artifact["task_results"]), 4)
+            self.assertEqual(len(artifact["task_results"]), 3)
             self.assertEqual(artifact["hardened_solution"], "Completed fixture synthesis")
             self.assertEqual(artifact["worker_effort"], "low")
+            # The patched legacy memory object still writes; production uses explicit read mode.
             self.assertEqual(memory.get_summary_stats()["entries"], 1)
-        self.assertEqual(len(calls), 6)  # decomposer, four nodes, reflection
+        self.assertEqual(len(calls), 4)  # deterministic review: three nodes and synthesis
         events = [json.loads(line) for line in progress.getvalue().splitlines()]
         self.assertEqual([event["phase"] for event in events if event["event"] == "phase_started"], [1, 2, 3, 4, 5])
         self.assertEqual([event["sequence"] for event in events], list(range(1, len(events) + 1)))
         self.assertEqual(events[-1]["event"], "run_completed")
-        self.assertEqual(len([event for event in events if event["event"] == "task_completed"]), 4)
+        self.assertEqual(len([event for event in events if event["event"] == "task_completed"]), 3)
         self.assertFalse(events[0]["web_enabled"])
         self.assertFalse(events[0]["jev_enabled"])
         self.assertNotIn("required constraint", progress.getvalue())  # no raw goal/prompt dump
@@ -308,7 +309,7 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
             memory = JarvisMemory(str(Path(directory) / "LEARNINGS.md"))
             progress = io.StringIO()
             with patch.object(mimir, "create_swarm_backend", return_value=backend), patch.object(mimir, "JarvisMemory", return_value=memory), patch.object(mimir.RecursiveDecomposer, "decompose_goal", decompose), redirect_stdout(progress):
-                with self.assertRaisesRegex(RuntimeError, "Swarm incomplete"):
+                with self.assertRaisesRegex(RuntimeError, "authentication failed"):
                     await mimir.run_mimir("objective", str(report), backend="claude", skip_web=True, enable_jev=False, progress_format="jsonl")
             self.assertFalse(report.exists())
             self.assertEqual(memory.get_summary_stats()["entries"], 0)
@@ -358,7 +359,7 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
         for key in ("MIMIR_MODEL", "MIMIR_CODEX_MODEL"):
             env.pop(key, None)
         with tempfile.TemporaryDirectory() as directory:
-            process = subprocess.run([sys.executable, "-B", str(Path(mimir.__file__)), "objective",
+            process = subprocess.run([sys.executable, "-B", str(Path(mimir.__file__).with_name("mimir.py")), "objective",
                                       "--backend", "codex", "--progress", "jsonl"], cwd=directory,
                                      capture_output=True, text=True, encoding="utf-8", env=env, timeout=20)
         self.assertNotEqual(process.returncode, 0)

@@ -1,326 +1,140 @@
-# M Í M I R // The Omniscient Oracle & Autonomous Swarm
+# Mímir — evidence-led research and review
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![skills.sh](https://img.shields.io/badge/skills.sh-compliant-purple.svg)](https://skills.sh)
+> **WORK IN PROGRESS — VERY BETA.** Mímir is experimental software under active
+> development. Use it for supervised, bounded investigations and inspect the
+> underlying evidence. APIs, checkpoints, instructions and dependencies may
+> change. Production readiness, universal harness support, independent factual
+> validation and general quality or performance improvements are not established.
 
-> *Drink from the Well. Truth distilled from the noise of the cosmos.*
+Mímir helps your coding assistant investigate difficult questions, compare
+designs and challenge consequential assumptions. A shared Python engine runs
+bounded workers, retains source/claim/gap records and publishes recoverable
+reports. Model findings remain evidence for review, not independently verified facts.
 
-**Mímir is a research and problem-solving skill for your coding assistant**, backed
-by a Python swarm engine. Ask it to investigate a difficult question, review an
-architecture, or challenge a proposed solution. It researches sources, builds a
-task graph, runs specialist workers, applies adversarial critique, and returns
-a report with cumulative learning. Responses can be in English or Swedish.
+Choose the smallest useful workflow:
 
-Use it inside your CLI harness with its existing login, or run the same engine
-directly from Python with a CLI or HTTP backend. CLI login reuse avoids separate
-API-key setup; it still consumes your account allowance or provider charges.
+| Mode | Model calls without retries/pruning | Use |
+| --- | --- | --- |
+| single | One research worker | Focused questions and baseline comparisons |
+| review (default) | Two specialists, a dependent critic, one synthesis | Architecture reviews and consequential proposals |
+| swarm | One bounded planner, up to max-tasks workers, one synthesis | Broader objectives benefiting from custom decomposition |
 
-[Skill usage](#use-mímir-as-a-skill) · [Supported harnesses](#supported-cli-harnesses) ·
-[Python usage](#run-the-python-engine-directly) · [Architecture](#how-the-swarm-works) ·
+Task count is independent of concurrency. Default task cap is four; JEV pruning
+is optional and off. There is no executive worker before final synthesis.
 
+Investigator implementation is a separate choice: `native`, typed DSPy, or
+DSPy RLM with Deno/Pyodide evidence execution and bounded nested RLM calls.
+Optional upstream GEPA training produces instruction candidates for explicit
+review and activation. [DSPy/RLM setup and use](docs/DSPY_RLM.md) describes the
+qualified Codex route, source manifests, budgets and current limits.
 
-## Use Mímir as a skill
+## What has changed
 
-Install into your current project, then start a new harness session so it can
-discover the skill:
+This development update replaces the older CLI-first swarm entrypoint with a
+shared engine and phased MCP control, dependency-ready scheduling, recoverable
+task/publication artifacts and explicit source/claim/gap records. Native worker
+adapters preserve the selected provider and credentials; optional captured-corpus
+DSPy/RLM investigators and separate upstream GEPA instruction training add bounded
+research paths. Learning candidates require review rather than automatic promotion.
 
-```bash
-npx skills add begosh/mimir --skill mimir
-```
+[Development notes](docs/DEVELOPMENT_STATUS.md) describe the implementation,
+validation, compatibility changes and open limitations in detail.
 
-Add `-g` for a global installation. Python 3.10+ and the dependencies in
-[requirements.txt](requirements.txt) are needed to run the swarm. The repository
-installer below also installs those dependencies.
+The repository also contains [Mycroft](mycroft/README.md), a **very BETA** experiment
+that transfers the research method to native harness subagents and skills without
+a Python orchestrator. It approximates DSPy/RLM/GEPA procedures; it does not execute
+those libraries. An independent Mímir review found admission, publication, recovery
+and isolation gaps. Use it for supervised experiments, with no claim of equivalent
+reliability. Its source, installer and acceptance fixtures are included; generate
+its transfer ZIP locally with `mycroft/Build-Package.ps1`.
 
-Ask your assistant naturally:
+## Install and connect
 
-```text
-Use Mímir to review our background-job architecture. Inspect this repository,
-compare retry and idempotency strategies, and challenge the failure modes.
-Keep the design suitable for a small team.
-```
-
-On first use in a project, Mímir asks which backend, worker model and effort you
-want. When the host is known, it suggests reusing that CLI login. It names the
-proposed worker settings before saving them in `.mimir/config.json`. Keys and
-conversation history are kept outside that file. Later runs reuse the agreed
-settings across hosting harnesses; Mímir asks again if the choice is unclear or
-the selected path fails its checks.
-
-The **hosting assistant** and **swarm workers** have separate model settings.
-For example, a Codex host using `gpt-6.1-sol` at high effort can propose
-`gpt-6.1-sol` at low effort for workers. You can choose another available model.
-The choice is saved explicitly; workers do not silently inherit later changes
-to the host model. Lower effort does not guarantee a particular cost saving.
-
-### Example: AGY
-
-**Illustrative conversation, not a recorded run.** Start `agy` in your project:
-
-```text
-You: Use Mímir to review our retry and idempotency design.
-
-Assistant: Use your AGY CLI login for Mímir's swarm workers with
-gemini-3.8-flash-low at low effort, and remember this for the project?
-You can also choose another worker model or an API backend.
-
-You: Yes, remember those settings.
-
-Assistant: Mímir workers: AGY · gemini-3.8-flash-low · low effort.
-Research started; I'll relay sources and task progress as they arrive.
-```
-
-### Example: Codex
-
-**Illustrative conversation, assuming the named model is available.** Start
-`codex`; invoke `$mimir` or ask it to use Mímir:
-
-```text
-You: $mimir Review our background-job architecture and its failure modes.
-
-Assistant: Your Codex harness uses gpt-6.1-sol at high effort.
-Use your Codex CLI login with gpt-6.1-sol at low effort for Mímir's
-swarm workers, and remember this? You can choose another model or API access.
-
-You: Yes, use that model at low effort for the swarm.
-
-Assistant: Mímir workers: Codex · gpt-6.1-sol · low effort · ephemeral calls.
-The Python engine will run the task graph and red-team review.
-```
-
-### Example: OpenCode
-
-**Illustrative conversation, assuming the provider/model is available.** Start
-`opencode` in your project:
-
-```text
-You: Use Mímir to investigate the safest retry strategy for our workers.
-
-Assistant: Use OpenCode for Mímir's swarm workers with
-opencode/minimax-m3.1-flash-free, no effort variant, and remember this?
-Workers use disposable storage. You can choose another provider/model or API.
-
-You: Yes, remember it.
-
-Assistant: Mímir workers: OpenCode · opencode/minimax-m3.1-flash-free · variant none.
-I'll relay the engine's research, task completion and critique updates.
-```
-
-### Example: progress inside a harness
-
-**Illustrative updates after a successful setup.** Exact wording, task counts,
-sources and timings depend on the objective and actual engine events:
-
-```text
-Research: found documentation and reference implementations for review.
-Planning: the task graph is ready; low-value branches were screened by JEV.
-Swarm: independent analysis tasks are queued; dependent tasks wait for results.
-Swarm: the domain analysis completed; its findings are available to the critic.
-Critique: the red-team identified a retry/idempotency gap.
-Reflection: the revised proposal addresses the recorded critique.
-Complete: report and JSON results saved; synthesis and limitations follow.
-```
-
-The skill relays flushed engine activity and excerpts from returned results.
-These updates show work and findings; they do not expose private model reasoning.
-Delivery depends on the host's shell polling. The Python engine owns the DAG,
-JEV gate and shared blackboard throughout the run.
-
-## Supported CLI harnesses
-
-These four CLIs have implemented **worker adapters** and skill installer targets.
-The conversations above are examples, not an exhaustive list of supported hosts.
-A different host can load the skill and use a supported worker CLI through its
-shell tools; it needs a new adapter to become a worker backend itself.
-
-| Harness / worker CLI | Backend | Worker model and effort | Session handling | Validation in this checkout |
-| --- | --- | --- | --- | --- |
-| Antigravity (`agy`) | `agy` | Default `gemini-3.8-flash-low`, low | Per-call disposable home/XDG/temp storage | Live one-call probe succeeded |
-| OpenAI Codex CLI | `codex` | Agreed explicit model; propose known host model at low effort | Native `--ephemeral`, read-only sandbox | Preflight passed; live probe timed out |
-| Claude Code | `claude` | Default `haiku`; Haiku has no adjustable effort | Native `--no-session-persistence`, read/search tools | Preflight passed; live probe failed local authentication |
-| OpenCode | `opencode` | Explicit `provider/model`; supported variant or `none` | Per-call disposable home/XDG/temp storage, sharing disabled | Live one-call probe succeeded; normal session IDs unchanged |
-
-Offline tests cover adapter behavior and orchestration. These probes do not
-certify every model, CLI version or full live swarm. AGY/OpenCode may create
-temporary conversations during execution; normal cleanup removes that storage.
-OpenCode currently reuses `auth.json` credentials and does not support DB-only
-login. Its `--no-replay` option controls history rendering, not persistence.
-
-See [harness compatibility and validation](prompts/HARNESS_EXECUTION.md) for
-controls, authentication limits and sources. Direct HTTP backends are also
-available: `openai`, `anthropic`, and `ollama`. Mímir never silently switches a
-failed CLI run to HTTP access.
-
-Workers retain their selected CLI's MCP configuration separately from session
-storage. They are instructed to use Work IQ for internal Microsoft 365 questions
-when available and carry source links and retrieval gaps into synthesis.
-Claude/OpenCode enable the Work IQ query operation alongside built-in read/search;
-other MCP operations remain subject to CLI permissions. Tools registered only
-in the host's CLI are not automatically registered in a different worker CLI.
-The Python scout searches public web/arXiv; HTTP workers have no MCP adapter.
-
-## Install from the repository
-
-```bash
-git clone https://github.com/begosh/mimir.git
-cd mimir
-
-# Install one shared package and link the supported CLI locations to it.
-python scripts/install.py --global
-
-# Or install into a chosen project.
-python scripts/install.py --project /path/to/project
-```
-
-The installer keeps one package (skill, scripts, prompts and docs) at
-`~/.agents/skills/mimir`, or `<project>/.agents/skills/mimir` for project installs.
-Other CLI locations point to that package using Windows directory junctions or
-Linux/macOS symlinks. Claude uses `~/.claude/skills/mimir`; AGY uses
-`~/.gemini/antigravity-cli/skills/mimir`; Antigravity uses
-`~/.gemini/antigravity/skills/mimir`. Codex/OpenCode discover shared skills
-directly; compatibility links cover their native skill paths too.
-
-Reinstalling updates the shared package once, and every link sees the update.
-Existing `LEARNINGS.md` is preserved. Replaced copies are moved outside discovery
-to `~/.agents/mimir-install-backups`, or `<project>/.mimir/install-backups`,
-retaining their contents and any separate learned notes. The installer reports
-those backup paths. `--target` chooses CLI links; the shared package is always
-installed. `--link` additionally points the shared package at the source checkout
-for development; that checkout must remain available.
-
-Installation fails visibly if a directory link cannot be created; it does not
-silently create divergent copies. It does not establish CLI login or certify
-installed model access.
-Run `python scripts/install.py --help` for target filtering and other options.
-
-Shell installers are also available:
-
-```bash
-# Linux / macOS / WSL
-curl -fsSL https://raw.githubusercontent.com/begosh/mimir/main/install.sh | bash -s -- --global
-```
+Use Python 3.10+ and one explicit interpreter:
 
 ```powershell
-# Windows PowerShell
-irm https://raw.githubusercontent.com/begosh/mimir/main/install.ps1 | iex
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-workers.txt
+.\.venv\Scripts\python.exe scripts/install.py --skip-pip
+.\.venv\Scripts\python.exe scripts/mimir.py --diagnostics --backend codex --model gpt-6.1-sol --effort low
 ```
 
-## Run the Python engine directly
+The installer preserves existing notes and backups and links harness skill
+discovery to one package. Installing the skill does not register MCP or copy its
+virtual environment. Configure the interpreter, workspace and durable run root
+using [integration instructions](docs/INTEGRATION.md). Existing project configs
+are local machine files. Reconnect the host after changing server code/tools.
 
-From a cloned repository:
+The installer installs native worker dependencies by default; --base-only is for
+explicit legacy/HTTP use. npx skills add begosh/mimir --skill mimir installs skill
+resources; the same Python dependencies and host MCP registration remain necessary.
 
-```bash
-python -m pip install -r requirements.txt
+## Use
 
-# Inspect project settings and available CLIs without invoking a model.
-python scripts/mimir.py --config-status
+Ask your assistant to use Mímir. Reuse an agreed backend/model/effort; otherwise
+consult once. The connected MCP exposes start_run, get_status, cancel_run,
+get_result and get_diagnostics. Plan, execute and synthesize share the same run
+ID. Final success follows cleanup; ready events describe saved checkpoints.
+Status supplies Mímir's concise narration and waits for meaningful changes by
+default. The assistant relays source gathering, specialist returns, critique and
+synthesis in chat; raw events are available as opt-in diagnostics.
 
-# Save your chosen worker backend, model and effort.
-python scripts/mimir.py --configure --backend agy --model gemini-3.8-flash-low --effort low
+[SKILL.md](SKILL.md) contains concise host instructions.
+[Terminal execution](docs/TERMINAL_EXECUTION.md) covers hosts without MCP.
+[Runtime research](docs/IMPLEMENTATION_RESEARCH_2026-10-22.md) records primary-source contracts.
 
-# Validate the selected CLI's flags and settings without a model call.
-python scripts/mimir.py --check
+Native worker defaults use Codex/Claude SDKs, an owned OpenCode HTTP server, or
+authenticated AGY CLI. Native configuration selects credentials and provider;
+host tools are not automatically available to workers. An explicit
+--worker-transport cli selects legacy adapters, with no automatic fallback.
+Old checkpoints retain their transport unless explicitly overridden.
 
-# Run with the saved settings and the Rich terminal display.
-python scripts/mimir.py "Review our background-job architecture and retry strategy"
-```
+## Evidence, recovery and learning
 
-The Python entrypoint expects you to configure a backend or pass one explicitly.
-It stops before model calls if neither exists. The interactive first-use
-question is handled by the hosting skill; `--configure` saves your explicit
-selection for direct Python use.
+Worker results retain readable answers, source locators, retrieval times/types,
+supporting excerpts, linked claims and gaps. Reports distinguish record coverage
+from factual validation; search snippets and abstracts are discovery material.
+Hashes and citation-string presence establish neither truth nor entailment.
 
-### One-run CLI examples
+Successful task artifacts are checkpointed before dependent admission.
+Dependency-ready scheduling avoids tier barriers. Retries validate prompts,
+profiles, dependencies and raw/parsed output identities before reusing completed
+work. Changed inputs require a new plan. Publication recovery validates existing
+artifacts and avoids repeated model/learning calls; it does not certify historical
+descendant cleanup from an earlier failed process.
 
-Replace placeholder models/variants with values available to your login:
+Memory defaults to read. Curated guidance lives at project .mimir/LEARNINGS.md;
+legacy project notes are read without modification. Explicit write mode appends
+unvalidated candidates to .mimir/learning-candidates.jsonl. Candidates are not
+automatically promoted or consumed. off omits memory context.
 
-```bash
-python scripts/mimir.py "Review our retry design" --backend agy
-python scripts/mimir.py "Review our retry design" --backend claude
-python scripts/mimir.py "Review our retry design" --backend codex --model <available-worker-model> --effort low
-python scripts/mimir.py "Review our retry design" --backend opencode --model <provider/model> --effort <variant-or-none>
-```
+Diagnostics expose runtime/installed identity, interpreter, native credential
+presence, workspace and storage paths without inference or secrets. On Windows,
+a required Codex provider key absent from the process can be supplied from User
+then Machine scope to the owned child only; explicitly empty process values
+suppress that inheritance.
 
-These overrides do not rewrite the saved profile. For a longer objective, put
-the question, relevant paths and constraints in a UTF-8 file:
+Context admission rejects oversized worker input without silently truncating
+evidence. Per-call input characters, durations and available tokens are retained.
+Unknown usage and billed cost remain explicit. [Evaluation workflow](docs/EVALUATION.md)
+provides a matched single/review comparison; no universal quality or speed gain
+is claimed.
 
-```bash
-python -u scripts/mimir.py --goal-file objective.txt --progress jsonl --output artifacts/review.md
-```
+## Dated support
 
-`terminal` is the default progress format; `jsonl` emits flushed activity for a
-hosting assistant or other consumer. A successful run writes a Markdown report
-and JSON sidecar, then appends learning to `LEARNINGS.md` beside the installed
-engine. Separate copied installations have separate learning files.
+| Worker | Current implementation | Qualification |
+| --- | --- | --- |
+| Codex | Python SDK 0.163.0, fresh ephemeral read-only threads | Direct Azure full MCP single/review runs verified; focused research qualification, not universal quality proof |
+| Claude | Agent SDK 0.2.172, fresh nonpersistent query | Last live provider probe HTTP 401; authenticated research unverified |
+| OpenCode | Owned localhost HTTP runtime, 1.19.3 routes | Health/session/cleanup passed without inference; native configuration discovery timed out |
+| AGY | Cached-login CLI with disposable storage | Historical one-call probe passed; full managed research unqualified |
+| Direct HTTP | Explicit selected endpoint adapters | No worker MCP tools; legacy cancellation limits remain |
 
-### HTTP and local-model examples
+Native Claude/OpenCode restrict research tools to approved read/query catalogs.
+Codex filesystem read-only policy does not restrict remote MCP writes.
+Provider/tool permissions must match the objective. Legacy dated CLI observations
+are in [HARNESS_EXECUTION.md](prompts/HARNESS_EXECUTION.md); they do not qualify
+native transports.
 
-Configure credentials in your environment before using a hosted HTTP provider:
-`OPENAI_API_KEY` for OpenAI-compatible access, or `ANTHROPIC_API_KEY` for Anthropic.
-Use `OPENAI_BASE_URL` for an OpenAI-compatible endpoint such as LM Studio or vLLM.
-Keep credentials outside the saved Mímir profile.
-
-```bash
-python scripts/mimir.py "Compare background-job designs" --backend openai --model gpt-4o-mini
-python scripts/mimir.py "Challenge our retry assumptions" --backend anthropic --model <available-anthropic-model>
-python scripts/mimir.py "Analyze idempotent APIs" --backend ollama --model <installed-local-model> --skip-web
-```
-
-The Ollama backend defaults to `http://localhost:11434/v1`; an installed model
-and running Ollama service are required. `--skip-web` excludes external scouting.
-HTTP adapters currently do not send reasoning-effort parameters.
-
-### Useful options
-
-| Option | Behavior |
-| --- | --- |
-| `--config-status`, `--configure` | Inspect or save project backend/model/effort |
-| `--host`, `--host-model` | Supply known host information for a setup suggestion; never save automatically |
-| `--backend`, `--model`, `--effort` | Override worker settings for this run |
-| `--check` | Validate CLI flags/settings; does not verify login or model access |
-| `--goal-file` | Load a UTF-8 objective with context and constraints |
-| `--progress terminal\|jsonl` | Rich display or flushed activity events |
-| `--concurrency` | Maximum concurrent workers; default 4 |
-| `--worker-timeout` | Timeout per CLI call; default 180 seconds |
-| `--output` | Report path; default `artifacts/mimir_solution.md` |
-| `--skip-web`, `--sources` | Disable scouting or add comma-separated source domains |
-| `--depth`, `--no-jev` | Set decomposition depth or disable JEV screening |
-
-Settings resolve from explicit arguments, then `MIMIR_BACKEND`,
-`MIMIR_<BACKEND>_MODEL` / `MIMIR_MODEL`, and `MIMIR_EFFORT`, then the saved
-matching backend profile. A different backend never inherits another backend's
-saved model or effort. Run `python scripts/mimir.py --help` for the full CLI.
-
-## How the swarm works
-
-The [skill](SKILL.md) captures the objective, agrees on execution settings, starts
-the Python engine through the host's shell, and presents the results. The
-engine preserves Mímir's five-phase design across all worker backends:
-
-```text
-Objective + cumulative learning
-              ↓
-1. Research scouting → source context
-              ↓
-2. Recursive task decomposition → acyclic DAG + JEV screening
-              ↓
-3. Parallel specialist workers → EvidenceContracts + shared blackboard
-              ↓
-4. Red-team critique → GEPA reflection and revised solution
-              ↓
-5. Synthesis → report + cumulative learning
-```
-
-The DAG carries dependency results to later workers and cascades failures.
-Worker calls are fresh and receive self-contained context; they do not resume
-the host conversation. Native host sub-agents are not an automatic substitute
-for this engine. EvidenceContract hashes record output identity; source quality
-and factual correctness still require assessment.
-
-Implementation: [orchestrator](scripts/mimir.py), [worker adapters](scripts/backend.py),
-[project configuration](scripts/mimir_config.py), [DAG and blackboard](scripts/task_graph.py),
-[JEV gate](scripts/jev_gate.py), [research scout](scripts/research_scout.py),
-[GEPA reflection](scripts/gepa_optimizer.py), [learning](scripts/jarvis_memory.py).
-The [porting specification](prompts/MIMIR_PORTING_PROMPT.md) describes the design
-to preserve when adding another adapter.
+Run .venv/Scripts/python.exe -m pytest -q for regression coverage. Mechanical
+tests and live source retrieval do not establish research completeness.

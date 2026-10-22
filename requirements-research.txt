@@ -1,0 +1,6 @@
+# Optional DSPy/RLM execution; native worker provider routing remains unchanged.
+-r requirements-workers.txt
+dspy[deno]==3.4.1
+deno==2.9.8
+gepa[dspy]==0.1.4
+pywin32==312; sys_platform == 'win32'
