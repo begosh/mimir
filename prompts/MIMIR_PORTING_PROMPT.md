@@ -71,7 +71,10 @@ Spawns headless `agy` subprocesses:
 ### Option C: Claude Code (`claude --print`)
 - `claude --print --no-session-persistence --output-format json --model haiku`
 - Reuses the CLI login; defaults to economical Haiku, which has no adjustable
-  effort. Restrict workers to read/search tools and do not load inherited MCP.
+  effort. Retain native MCP configuration; permit built-in read/search and
+  the Work IQ `ask_work_iq` operation under configured server names. Use
+  `--permission-mode dontAsk` and preserve existing deny rules. Do not enable
+  blanket permission bypass or remove research tools to isolate conversations.
 
 ### Option D: OpenCode (`opencode run`)
 - `opencode run --format json --model <provider/model> --variant <supported-low-cost-variant>`

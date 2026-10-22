@@ -11,6 +11,18 @@ JEV pruning, DAG scheduling, the blackboard, red-team reflection, and cumulative
 learning. A CLI backend supplies fresh worker calls using an existing login.
 Preserve that division across AGY, Codex, Claude Code, OpenCode, and other harnesses.
 
+## Research tools
+
+Workers use the selected worker CLI's configured tools, which may differ from
+the hosting assistant's tools. For internal Microsoft 365 evidence, use Work IQ
+when configured; retain primary source links and explicit retrieval gaps.
+The Python scout searches public web/arXiv sources; MCP retrieval happens in
+worker tasks and their results flow through the blackboard into synthesis.
+Mímir preserves CLI tool configuration separately from disposable conversation
+storage. Built-in read/search and the Work IQ `ask_work_iq` operation are enabled
+for unattended Claude/OpenCode workers; other MCP tools remain subject to that
+CLI's permissions. See [worker compatibility](prompts/HARNESS_EXECUTION.md).
+
 ## Mode A: Python swarm (default for a Mímir investigation)
 
 In established environments (such as Antigravity, Codex, Claude Code, OpenCode), do NOT run preliminary discovery commands (`--config-status`, `--configure`, or `--check`) as separate shell tools. Pass the backend and model flags directly to Mímir to avoid spawning redundant console windows.

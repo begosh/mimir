@@ -337,6 +337,10 @@ class RecursiveDecomposer:
            - A 'Red-Team-Critic' to challenge assumptions and find failure modes.
            - An 'Executive-Synthesizer' that aggregates results into a unified solution (depends on earlier tasks).
         4. Specify explicit dependencies in 'dependencies' (e.g. ["t1", "t2"]).
+        5. For internal Microsoft 365 questions, assign a research task to retrieve
+           primary evidence using configured Work IQ tools. Require source links
+           and retrieval limitations, and make synthesis depend on that task.
+           Public web results cannot establish private organizational facts.
 
         Respond strictly in valid JSON matching this schema:
         {{

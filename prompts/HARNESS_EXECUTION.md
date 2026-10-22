@@ -8,7 +8,7 @@ The objective and blackboard carry context; the host conversation is not resumed
 | --- | --- | --- | --- |
 | Codex | `codex exec`, stdin prompt, last-message file | Native `--ephemeral`, read-only sandbox | Explicit economical model; reasoning effort defaults to low |
 | AGY | `agy -p`, JSON output, sandbox, skill expansion disabled | Disposable home/XDG/temp directories per call; selected login files copied | Default `gemini-3.8-flash-low`, low effort |
-| Claude Code | `claude --print`, stdin prompt, JSON result | Native `--no-session-persistence`, read/search tools, no inherited MCP | Default `haiku`; no adjustable effort on Haiku; other models need `--effort` support |
+| Claude Code | `claude --print`, stdin prompt, JSON result | Native `--no-session-persistence`, native MCP configuration, read/search and Work IQ queries | Default `haiku`; no adjustable effort on Haiku; other models need `--effort` support |
 | OpenCode | `opencode run`, stdin prompt, JSON events | Disposable home/XDG/temp directories; no attach/resume; sharing disabled | Explicit `provider/model`; effort maps to variant, or none to omit it |
 
 `--check` validates installed CLI help and settings without a model call. It
@@ -22,21 +22,49 @@ Codex/Claude retain normal login configuration. Non-persistence does not disable
 account-side usage records or imply empty configuration.
 
 AGY has no native ephemeral switch in locally inspected help. The adapter copies
-only `.gemini/oauth_creds.json`, `google_accounts.json`, and `installation_id` to
-each disposable home. No history or skills are copied. Other credential stores
+`.gemini/oauth_creds.json`, `google_accounts.json`, and `installation_id`, plus
+MCP definitions from `.gemini/config/mcp_config.json`,
+`.gemini/antigravity/mcp_config.json`, and the `mcpServers` section of
+`.gemini/settings.json` to each disposable home. No history, hooks or skills are
+copied. Workers use `--mode plan` and sandboxing, without permission bypass.
+Other credential stores
 may require adapter updates. Temporary conversations can exist during execution;
 normal cleanup removes them. Forced termination of the entire engine can leave
 temporary files; this must not be described as native zero-persistence.
 
-OpenCode copies only `auth.json` from the normal XDG OpenCode data directory.
+OpenCode copies `auth.json` and `mcp-auth.json` from the normal XDG data directory.
 It never copies `opencode.db`, which can contain conversations. DB-only logins
 and providers requiring additional authentication plugins are not yet supported.
-Global configuration is not copied. Project configuration can still be discovered;
-inline worker permissions deny tools except read/glob/grep/webfetch and disable
-sharing. Choose a supported economical variant instead of assuming low works
+The native config directory, explicit `OPENCODE_CONFIG`, and inline
+`OPENCODE_CONFIG_CONTENT` are preserved while session data/cache/state remain
+temporary. OpenCode resolves native JSON/JSONC and project configuration itself;
+plugins remain subject to their own compatibility with disposable storage.
+Inline worker permissions default to deny and permit read/glob/grep/webfetch,
+websearch and `*_ask_work_iq`. Preflight resolves native permissions through
+`opencode debug config`; restrictive native rules follow the query allowlist
+so exact denies retain precedence. Explicit inline per-tool choices are retained.
+Sharing and auto-update are disabled. Choose a supported economical variant instead of assuming low works
 on every model. OpenCode 1.19.3 has been checked locally as described below.
 Its `--no-replay` option disables mini-interface history rendering on resume/resize;
 it does not prevent persistence and is not an `opencode run` flag.
+
+## Research tool access
+
+Each worker uses its selected CLI's configuration, not a copy of the host chat's
+tool set. Work IQ configured only in Codex does not become available to a Claude
+worker. Codex retains native MCP configuration and permissions. Claude retains
+native MCP configuration (no `--strict-mcp-config`) and allows the specific
+`ask_work_iq` operation under configured server names, alongside built-in
+read/search tools; existing deny rules still apply under `dontAsk` mode.
+Other configured MCP tools require appropriate native permissions.
+
+All four CLI workers receive guidance to use Work IQ for internal M365 evidence,
+prefer primary sources for public questions, and preserve source URLs, dates and
+retrieval limits. Absent tools, authentication failures and permission denials
+are evidence gaps, never proof that no records exist. Tool discovery is not a
+guarantee that a server connects or that a model calls it. Direct HTTP backends
+have no MCP adapter. The Python scout remains public-web/arXiv only; worker
+retrieval results enter the blackboard and final synthesis.
 
 Temporary storage avoids normal session history only if the CLI honors those
 roots. Adapter tests verify Mímir's commands and storage ownership; repeat live

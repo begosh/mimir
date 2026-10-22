@@ -230,6 +230,8 @@ async def _run_plan_stage(goal: str, output_path: str, model: str, backend: str,
 
     ui.print_banner(goal, active_model, backend_display, memory_stats=mem_stats,
                     web_enabled=not skip_web, jev_enabled=enable_jev, phase_mode="PLAN")
+    ui.notice("worker_research_tools", "  Worker research tools: " +
+              getattr(swarm, "research_tool_policy", "No MCP tool adapter; use supplied evidence"))
 
     start_plan_time = time.time()
     intel_brief = IntelligenceBrief(topic=goal)

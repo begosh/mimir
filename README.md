@@ -152,6 +152,14 @@ controls, authentication limits and sources. Direct HTTP backends are also
 available: `openai`, `anthropic`, and `ollama`. Mímir never silently switches a
 failed CLI run to HTTP access.
 
+Workers retain their selected CLI's MCP configuration separately from session
+storage. They are instructed to use Work IQ for internal Microsoft 365 questions
+when available and carry source links and retrieval gaps into synthesis.
+Claude/OpenCode enable the Work IQ query operation alongside built-in read/search;
+other MCP operations remain subject to CLI permissions. Tools registered only
+in the host's CLI are not automatically registered in a different worker CLI.
+The Python scout searches public web/arXiv; HTTP workers have no MCP adapter.
+
 ## Install from the repository
 
 ```bash

@@ -7,6 +7,7 @@ import sys
 import subprocess
 import tempfile
 import unittest
+from fnmatch import fnmatchcase
 from pathlib import Path
 from unittest.mock import patch
 from contextlib import redirect_stdout
@@ -14,7 +15,7 @@ from contextlib import redirect_stdout
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from backend import (AgySwarmBackend, ClaudeCodeSwarmBackend, CodexSwarmBackend,
                      OpenCodeSwarmBackend, SwarmResult, SwarmTask, create_swarm_backend,
-                     disposable_cli_env)
+                     disposable_cli_env, claude_research_tools)
 from task_graph import Blackboard, TaskGraph, TaskNode, TaskStatus
 from install import copy_skill_tree, get_project_targets
 import mimir
@@ -41,6 +42,8 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
         roots = []
         async def run(cmd, prompt=None, env=None):
             self.assertIn("--sandbox", cmd)
+            self.assertEqual(cmd[cmd.index("--mode") + 1], "plan")
+            self.assertNotIn("--dangerously-skip-permissions", cmd)
             self.assertIn("--disable-slash-commands", cmd)
             roots.append(Path(env["HOME"]))
             (roots[-1] / "fake-session").write_text("session")
@@ -56,7 +59,12 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
         async def run(cmd, prompt=None, env=None):
             self.assertIn("--no-session-persistence", cmd)
             self.assertNotIn("--effort", cmd)  # Haiku has no effort control
-            self.assertIn("--strict-mcp-config", cmd)
+            self.assertNotIn("--strict-mcp-config", cmd)
+            allowed = cmd[cmd.index("--allowedTools") + 1].split(",")
+            self.assertIn("mcp__workiq__ask_work_iq", allowed)
+            self.assertNotIn("mcp__workiq__*", allowed)
+            self.assertNotIn("Bash", allowed)
+            self.assertEqual(cmd[cmd.index("--permission-mode") + 1], "dontAsk")
             return 0, json.dumps({"subtype": "success", "result": '{"answer": 42}'}), ""
         backend._run_cli = run
         result = await backend.spawn("objective")
@@ -131,13 +139,96 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
             authdir = home / ".local/share/opencode"
             authdir.mkdir(parents=True)
             (authdir / "auth.json").write_text("{}")
+            (authdir / "mcp-auth.json").write_text('{"workiq": {"token": "fixture"}}')
             (authdir / "opencode.db").write_text("private-sessions")
             with patch.object(Path, "home", return_value=home), patch.dict(os.environ, {}, clear=True):
                 with disposable_cli_env("opencode") as env:
                     disposable = Path(env["XDG_DATA_HOME"]) / "opencode"
                     self.assertTrue((disposable / "auth.json").exists())
+                    self.assertTrue((disposable / "mcp-auth.json").exists())
                     self.assertFalse((disposable / "opencode.db").exists())
                 self.assertEqual((authdir / "opencode.db").read_text(), "private-sessions")
+
+    def test_opencode_preserves_config_paths_and_inline_mcp_without_sessions(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            config_dir = home / "custom-config"
+            config_dir.mkdir()
+            config_file = config_dir / "opencode.jsonc"
+            config_file.write_text('{"mcp": {"workiq": {"type": "local", "command": ["workiq"]}}}')
+            inline = {"mcp": {"docs": {"type": "remote", "url": "https://example.org/mcp"}},
+                      "permission": {"*": "allow", "workiq_ask_work_iq": "deny"}}
+            original = {"OPENCODE_CONFIG_DIR": str(config_dir), "OPENCODE_CONFIG": str(config_file),
+                        "OPENCODE_CONFIG_CONTENT": json.dumps(inline)}
+            with patch.object(Path, "home", return_value=home), patch.dict(os.environ, original, clear=True):
+                with disposable_cli_env("opencode") as env:
+                    self.assertEqual(env["OPENCODE_CONFIG_DIR"], str(config_dir))
+                    self.assertEqual(env["OPENCODE_CONFIG"], str(config_file))
+                    self.assertNotEqual(env["HOME"], str(home))
+                    self.assertNotEqual(env["XDG_DATA_HOME"], str(home))
+                    effective = json.loads(env["OPENCODE_CONFIG_CONTENT"])
+                    self.assertEqual(effective["mcp"], inline["mcp"])
+                    self.assertEqual(effective["permission"]["*"], "deny")
+                    self.assertEqual(effective["permission"]["workiq_ask_work_iq"], "deny")
+                    self.assertEqual(effective["share"], "disabled")
+                self.assertEqual(os.environ["OPENCODE_CONFIG_CONTENT"], json.dumps(inline))
+                self.assertTrue(config_file.exists())
+
+    def test_agy_copies_mcp_definitions_without_history_or_hooks(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            gemini = home / ".gemini"
+            (gemini / "config").mkdir(parents=True)
+            servers = {"mcpServers": {"workiq": {"command": "workiq"}}}
+            (gemini / "config/mcp_config.json").write_text(json.dumps(servers))
+            (gemini / "settings.json").write_text(json.dumps({**servers, "hooks": {"unsafe": "fixture"}}))
+            (gemini / "history.jsonl").write_text("private-history")
+            with patch.object(Path, "home", return_value=home), patch.dict(os.environ, {}, clear=True):
+                with disposable_cli_env("agy") as env:
+                    copied = Path(env["HOME"]) / ".gemini"
+                    self.assertEqual(json.loads((copied / "config/mcp_config.json").read_text()), servers)
+                    self.assertEqual(json.loads((copied / "settings.json").read_text()), servers)
+                    self.assertFalse((copied / "history.jsonl").exists())
+                    worker_home = copied.parent
+                self.assertFalse(worker_home.exists())
+                self.assertEqual((gemini / "history.jsonl").read_text(), "private-history")
+
+    async def test_opencode_preflight_retains_native_denies_after_query_allowlist(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            authdir = home / ".local/share/opencode"
+            authdir.mkdir(parents=True)
+            (authdir / "auth.json").write_text("{}")
+            backend = OpenCodeSwarmBackend("provider/worker", opencode_path="opencode")
+            async def run(cmd, prompt=None, env=None):
+                if "--help" in cmd:
+                    return 0, " ".join(backend.required_flags), ""
+                if "debug" in cmd:
+                    return 0, json.dumps({"permission": {"workiq_ask_work_iq": "deny", "*_ask_work_iq": "allow"}}), ""
+                # Simulate native deep merge, which retains existing key order.
+                rules = {"workiq_ask_work_iq": "deny", "*_ask_work_iq": "allow"}
+                rules.update(json.loads(env["OPENCODE_CONFIG_CONTENT"])["permission"])
+                matches = [value for pattern, value in rules.items() if fnmatchcase("workiq_ask_work_iq", pattern)]
+                self.assertEqual(matches[-1], "deny")
+                return 0, json.dumps({"type": "text", "part": {"text": '{"gap": "permission denied"}'}}), ""
+            backend._run_cli = run
+            with patch.object(Path, "home", return_value=home), patch.dict(os.environ, {}, clear=True):
+                await backend.check_cli()
+                result = await backend.spawn("Retrieve M365 evidence")
+                self.assertEqual(result.status, "SUCCESS")
+
+    def test_claude_workiq_operation_allowed_for_custom_mcp_server_names(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            (home / ".claude.json").write_text(json.dumps({"mcpServers": {"m365": {}},
+                "projects": {home.as_posix(): {"mcpServers": {"project-m365": {}}}}}))
+            (home / ".mcp.json").write_text(json.dumps({"mcpServers": {"team-m365": {}}}))
+            with patch.object(Path, "home", return_value=home), patch.object(Path, "cwd", return_value=home):
+                allowed = claude_research_tools()
+                self.assertIn("mcp__m365__ask_work_iq", allowed)
+                self.assertIn("mcp__project-m365__ask_work_iq", allowed)
+                self.assertIn("mcp__team-m365__ask_work_iq", allowed)
+                self.assertTrue(all(tool.endswith("__ask_work_iq") for tool in allowed))
 
     def test_factory_config_and_cli_only_discovery(self):
         with patch.dict(os.environ, {"MIMIR_BACKEND": "claude", "MIMIR_CLAUDE_MODEL": "haiku", "MIMIR_EFFORT": "low"}, clear=True), patch("shutil.which", return_value="claude"):
