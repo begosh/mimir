@@ -22,11 +22,13 @@ class StdioProtocol(unittest.IsolatedAsyncioTestCase):
                     tools = {t.name: t for t in listed.tools}
                     self.assertEqual(set(tools), {"start_run", "get_status", "cancel_run", "get_result", "get_diagnostics"})
                     self.assertTrue(tools["get_diagnostics"].annotations.read_only_hint)
+                    self.assertTrue(tools["get_diagnostics"].annotations.open_world_hint)
+                    self.assertIn("check_search", tools["get_diagnostics"].input_schema["properties"])
                     diagnostic = await client.call_tool("get_diagnostics", {"backend": "codex"})
                     self.assertFalse(diagnostic.is_error)
                     self.assertTrue(tools["get_status"].annotations.read_only_hint)
                     self.assertFalse(tools["start_run"].annotations.destructive_hint)
-                    for name in ("research_program", "research_budget", "source_manifest", "program_manifest"):
+                    for name in ("research_program", "research_budget", "source_manifest", "program_manifest", "task_brief", "recursive_plan", "planning_budget", "max_depth"):
                         self.assertIn(name, tools["start_run"].input_schema["properties"])
                     result = await client.call_tool("get_status", {"run_id": "../secret"})
                     self.assertTrue(result.is_error)

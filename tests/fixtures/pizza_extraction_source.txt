@@ -1,0 +1,10 @@
+SYNTHETIC TEST FIXTURE: not an authentic or recommended pizza recipe.
+L01 Yield: four dough balls. Ball weights are not stated.
+L02 Dough ingredients: 600 g flour, 390 g water, 18 g salt, 1 g fresh yeast.
+L03 Dissolve the yeast in the water. Add flour and salt; mix for 2 minutes.
+L04 Knead for 8 minutes. Mixing and kneading temperatures are not stated.
+L05 Cover the dough and bulk-ferment for 18 hours at 20 C.
+L06 Divide the dough into four equal portions, then shape each portion into a ball.
+L07 Proof the covered balls for 4 hours. Final-proof temperature is not stated.
+L08 Stretch each ball into a round by hand. Do not use a rolling pin.
+L09 Dividing, balling and stretching durations and temperatures are not stated.

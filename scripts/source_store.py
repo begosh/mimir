@@ -42,8 +42,11 @@ class SourceStore:
         if not 1 <= len(data["sources"]) <= 64:
             raise ValueError("A source manifest requires 1-64 explicit records")
         for item in data["sources"]:
-            if not isinstance(item, dict) or set(item) not in ({"id", "path"}, {"id", "url"}):
+            if not isinstance(item, dict) or set(item) - {"status"} not in ({"id", "path"}, {"id", "url"}):
                 raise ValueError("Each source requires id and either path or url")
+            if item.get("status", "user_supplied" if "path" in item else "retrieved") not in {
+                    "synthetic_fixture", "user_supplied", "retrieved", "unverified"}:
+                raise ValueError("Invalid source status")
             if "path" in item:
                 target = (path.parent / item["path"]).resolve(strict=True)
                 if target.stat().st_size > 20_000_000:

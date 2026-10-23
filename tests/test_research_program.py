@@ -34,6 +34,22 @@ class FakeNative:
 
 
 class BudgetTests(unittest.IsolatedAsyncioTestCase):
+    async def test_restricted_synthesis_dispatch_and_accounting(self):
+        class Native(FakeNative):
+            async def spawn_restricted(self, prompt, **options):
+                result = await super().spawn(prompt, **options)
+                result.usage_details = {"input_tokens": 8, "cached_input_tokens": 4, "output_tokens": 2}
+                result.timing = {"turn_seconds": .1}
+                return result
+            async def spawn(self, *args, **options):
+                raise AssertionError("Restricted synthesis must not dispatch a research worker")
+        broker = InvocationBroker(Native())
+        await broker.spawn_restricted("Supplied evidence only", role="GEPA-Evolver")
+        call = broker.usage_calls[0]
+        self.assertEqual((call["model"], call["effort"], call["tool_policy"]), ("test", "low", "text_only"))
+        self.assertEqual(call["usage_details"]["cached_input_tokens"], 4)
+        self.assertEqual(call["timing"]["turn_seconds"], .1)
+
     async def test_crash_journal_charges_inflight_and_preserves_deadline(self):
         with tempfile.TemporaryDirectory() as tmp:
             journal = Path(tmp) / "operations.jsonl"

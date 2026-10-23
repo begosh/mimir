@@ -10,13 +10,23 @@ from __future__ import annotations
 
 import html
 import json
+import os
 import re
+import ssl
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
 from mimir_config import is_english_text
 from typing import Any, Dict, List, Optional
+
+
+def configured_ca_bundle() -> Optional[str]:
+    """Honor Python CA settings, then the shared enterprise Node CA bundle."""
+    for name in ("REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS"):
+        if os.environ.get(name):
+            return os.environ[name]
+    return None
 
 
 def public_search_query(text: str) -> str:
@@ -266,7 +276,13 @@ class ResearchScout:
                 url,
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MimirOmniScout/2.0"},
             )
-            with urllib.request.urlopen(req, timeout=self.timeout_sec) as response:
+            tls_options = {}
+            ca_bundle = configured_ca_bundle()
+            if ca_bundle:
+                context = ssl.create_default_context()
+                context.load_verify_locations(cafile=ca_bundle)
+                tls_options["context"] = context
+            with urllib.request.urlopen(req, timeout=self.timeout_sec, **tls_options) as response:
                 xml_data = response.read()
 
             root = ET.fromstring(xml_data)
@@ -329,6 +345,7 @@ class ResearchScout:
                 url,
                 impersonate="chrome120",
                 timeout=self.timeout_sec,
+                verify=configured_ca_bundle() or True,
                 headers={"Accept-Language": "en-US,en;q=0.9,sv;q=0.8"},
             )
             if res.status_code != 200:

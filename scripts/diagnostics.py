@@ -178,9 +178,11 @@ def collect_diagnostics(backend: str, model: str | None = None, effort: str | No
                         run_root: str | Path | None = None,
                         memory_path: str | Path | None = None, memory_mode: str = "read", *,
                         workspace: str | Path | None = None,
-                        worker_transport: str = "native") -> dict[str, Any]:
+                        worker_transport: str | None = None, check_search: bool = False) -> dict[str, Any]:
     """Collect safe identities and prerequisites without starting any worker."""
     workspace = Path(workspace or Path.cwd()).resolve()
+    worker_transport = worker_transport or os.environ.get("MIMIR_WORKER_TRANSPORT") or (
+        "hybrid" if backend in {"codex", "agy", "claude", "opencode"} else "native")
     runtime_root = Path(__file__).resolve().parent.parent
     try:
         installed_root = Path.home() / ".agents" / "skills" / "mimir"
@@ -195,21 +197,30 @@ def collect_diagnostics(backend: str, model: str | None = None, effort: str | No
         packages[package] = {"installed": installed, "expected": expected,
                              "version_matches": installed == expected}
     native, _private = native_environment(backend, workspace=workspace)
+    text_api = None
+    if worker_transport == "hybrid" or backend == "responses":
+        from text_api_backend import TextResponsesBackend
+        try:
+            adapter = TextResponsesBackend(model or "configuration_probe", effort=effort or "low")
+            text_api = {"ready": True, "provider": adapter.provider, "model": model,
+                        "effort": effort or "low", "verification": "Configuration only; no request made"}
+        except (ValueError, OSError) as exc:
+            text_api = {"ready": False, "errors": [str(exc)]}
     required = ({"codex": ["openai-codex", "jsonschema"],
                  "claude": ["claude-agent-sdk", "jsonschema"],
                  "opencode": ["httpx", "jsonschema"]}.get(backend, [])
-                if worker_transport == "native" else [])
+                if worker_transport == "native" and backend != "responses" else ["httpx", "jsonschema"] if text_api is not None else [])
     missing_dependencies = [name for name in required if packages[name]["installed"] is None]
     cli = shutil.which(backend) if backend in ("codex", "claude", "opencode", "agy") else None
-    needs_cli = backend == "agy" or backend == "opencode" or worker_transport == "cli"
-    failures = list(native["errors"])
+    needs_cli = worker_transport != "hybrid" and (backend == "agy" or backend == "opencode" or worker_transport == "cli")
+    failures = list(text_api.get("errors", [])) if text_api is not None else list(native["errors"])
     if needs_cli and not cli:
         failures.append(f"Selected {backend} worker executable is unavailable.")
     memory = Path(memory_path).resolve() if memory_path else workspace / ".mimir" / "LEARNINGS.md"
     runtime = _code_identity(runtime_root)
     installed = _code_identity(installed_root) if installed_root and installed_root.is_dir() else None
     from research_program import research_runtime
-    return {"backend": backend, "model": model, "effort": effort,
+    report = {"backend": backend, "model": model, "effort": effort,
         "worker_transport": worker_transport, "interpreter": sys.executable,
         "python_version": sys.version.split()[0], "workspace": str(workspace),
         "run_root": str(Path(run_root).resolve() if run_root else workspace / ".mimir" / "runs"),
@@ -218,20 +229,28 @@ def collect_diagnostics(backend: str, model: str | None = None, effort: str | No
         "dependencies": packages, "missing_dependencies": missing_dependencies,
         "optional_research": research_runtime(),
         "native": native, "worker_executable": cli,
+        "text_api": text_api, "tool_runtime_preflight": "Deferred until tools are needed" if worker_transport == "hybrid" else "Required",
         "memory": {"mode": memory_mode, "guidance_path": str(memory),
                    "candidate_path": str(memory.parent / "learning-candidates.jsonl"),
                    "legacy_readonly_path": str(workspace / "LEARNINGS.md")},
         "research_tools": "Native configured catalog; read-only filesystem does not verify remote tool side effects",
         "errors": failures,
-        "ready": native["ready"] and not missing_dependencies and not failures,
+        "ready": (text_api["ready"] if text_api is not None else native["ready"]) and not missing_dependencies and not failures,
         "verification": "No inference, network authentication, tool invocation, or login mutation performed"}
+    if check_search:
+        from search_diagnostics import collect_search_diagnostics
+        report["search"] = collect_search_diagnostics()
+        report["verification"] = "Static worker preflight plus public search probes; no inference, login or configuration changes. Worker readiness and search usability are separate."
+    else:
+        report["search"] = {"checked": False, "reason": "Use --doctor or get_diagnostics(check_search=true) to test public search."}
+    return report
 
 
 def require_ready(report: dict[str, Any]) -> None:
     """Stop before planning when an established local prerequisite is missing."""
     if report.get("ready"):
         return
-    native = report.get("native", report)
+    native = report.get("text_api") or report.get("native", report)
     missing = native.get("missing_environment", [])
     dependencies = report.get("missing_dependencies", [])
     if missing:

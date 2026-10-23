@@ -161,6 +161,29 @@ class CodexSdkContracts(unittest.IsolatedAsyncioTestCase):
         await backend.spawn("task")
         self.assertFalse(hasattr(self.sdk.clients[0].config, "codex_bin"))
 
+    async def test_schema_rejection_preserves_original_output_and_usage(self):
+        backend = self.backend()
+        result = await backend.spawn("task", json_schema={"type": "object", "properties": {
+            "finding": {"type": "string", "maxLength": 2}}})
+        self.assertEqual(result.status, "ERROR")
+        self.assertEqual(result.tokens_used, 17)
+        self.assertEqual(result.rejected_output["result"], {"finding": "supported"})
+        self.assertTrue(self.sdk.clients[0].closed)
+
+    async def test_worker_low_effort_overrides_host_and_retains_usage_breakdown(self):
+        backend = self.backend()
+        self.sdk.result.usage = SimpleNamespace(total=SimpleNamespace(
+            total_tokens=110, input_tokens=100, cached_input_tokens=80,
+            output_tokens=10, reasoning_output_tokens=3))
+        result = await backend.spawn("One bounded task", model="gpt-6.1-sol")
+        client = self.sdk.clients[0]
+        self.assertEqual(client.turn_options["model"], "gpt-6.1-sol")
+        self.assertEqual(client.turn_options["effort"], Effort.low)
+        self.assertEqual(result.usage_details["cached_input_tokens"], 80)
+        self.assertEqual(result.usage_details["reasoning_output_tokens"], 3)
+        self.assertEqual(result.tokens_used, 110)
+        self.assertTrue({"runtime_start_seconds", "thread_ready_seconds", "turn_seconds", "cleanup_seconds"} <= result.timing.keys())
+
     async def test_check_does_not_start_runtime_or_authenticate(self):
         backend = self.backend()
         self.assertEqual(backend.transport, "sdk")

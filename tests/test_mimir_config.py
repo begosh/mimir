@@ -68,7 +68,6 @@ class ProjectConfiguration(unittest.TestCase):
         self.assertEqual(set(second), {"version", "backend", "model", "effort"})
         invalid = [dict(second, api_key="must-not-save"), dict(second, version=True),
                    dict(second, backend=[]), dict(second, model=None), dict(second, effort="unknown"),
-                   dict(second, backend="opencode", model="no-provider"),
                    dict(second, backend="opencode", model="provider/")]
         for value in invalid:
             with self.subTest(value=value), self.assertRaises(ConfigurationRequired):

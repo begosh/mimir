@@ -2,7 +2,7 @@
 scripts/mimir.py
 M Í M I R // The Omniscient Oracle & Autonomous Recursive Multi-Agent Swarm.
 Keeper of the Well of Wisdom (Mimisbrunnr).
-Combines public research scouting, atomic DAG decomposition,
+Combines task interpretation, bounded DAG decomposition,
 JEV System-1 decision gating, EvidenceContracts, and cumulative long-term memory.
 Worker prompts and generated reports currently use English.
 Supports both single-run pipeline and discrete phased execution (--phase plan|execute|synthesize|all).
@@ -31,7 +31,6 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from backend import BaseSwarmBackend, SwarmResult, SwarmTask, create_swarm_backend, has_worker_result, worker_diagnostic
 from mimir_config import is_english_text, ConfigurationRequired, configure, config_status, resolve_execution
-from gepa_optimizer import GepaOptimizer
 from jarvis_memory import JarvisMemory
 from jev_gate import JevDecisionGate
 from research_scout import IntelligenceBrief, ResearchScout
@@ -350,7 +349,9 @@ async def _run_plan_stage(goal: str, output_path: str, model: str, backend: str,
                           search_query: Optional[str] = None, worker_transport: str = "native",
                           mode: str = "review", max_tasks: int = 4,
                           memory_mode: str = "read", memory_path: Optional[str] = None,
-                          max_context_chars: int = 120000) -> Dict[str, Any]:
+                          max_context_chars: int = 120000,
+                          task_brief: Optional[Dict[str, Any]] = None,
+                          recursive_plan: bool = False, planning_budget=None) -> Dict[str, Any]:
     is_en = ui.is_en
     if swarm is None:
         swarm = create_swarm_backend(backend_type=backend, model=model, max_concurrency=max_concurrency,
@@ -364,52 +365,39 @@ async def _run_plan_stage(goal: str, output_path: str, model: str, backend: str,
     mem_stats = memory.get_summary_stats()
 
     ui.print_banner(goal, active_model, backend_display, memory_stats=mem_stats,
-                    web_enabled=not skip_web, jev_enabled=enable_jev, phase_mode="PLAN")
+                    web_enabled=False, jev_enabled=enable_jev, phase_mode="PLAN")
     ui.notice("worker_research_tools", "  Worker research tools: " +
               getattr(swarm, "research_tool_policy", "No MCP tool adapter; use supplied evidence"))
 
     start_plan_time = time.time()
     intel_brief = IntelligenceBrief(topic=goal)
-    if not skip_web:
-        ui.print_phase(1, "Mímir's World Scrying (Omni-Channel Discovery)")
-        ui.notice("scout_querying", "  [BUSY] Mímir scries the world's networks... sifting primary evidence from cosmic noise.")
-        scout = ResearchScout()
-        # Network discovery is synchronous; keep the event loop available for
-        # flushed liveness events while the search is waiting on remote sources.
-        scout_options = {"custom_domains": sources}
-        if search_query is not None:
-            scout_options["search_query"] = search_query
-        discovery = asyncio.create_task(asyncio.to_thread(scout.conduct_deep_scout, goal, **scout_options))
-        try:
-            intel_brief = await asyncio.shield(discovery)
-        except asyncio.CancelledError:
-            # urllib cannot abort an executor thread. Join its bounded requests
-            # before releasing run ownership; no false completed cancellation.
-            while not discovery.done():
-                try:
-                    await asyncio.shield(discovery)
-                except asyncio.CancelledError:
-                    continue
-                except Exception:
-                    break
-            if discovery.done() and not discovery.cancelled():
-                discovery.exception()
-            raise
-        ui.display_intel(intel_brief)
-    else:
-        ui.print_phase(1, "Skipping external discovery (--skip-web)")
-        ui.emit("research_skipped")
-
-    intel_context = intel_brief.to_compact_markdown()
+    ui.print_phase(1, "Getting our bearings before evidence retrieval")
+    ui.emit("research_skipped", reason="No preliminary search; task interpretation precedes worker retrieval.")
+    # Legacy search arguments remain hints, never a pre-planning network call.
+    hints = {}
+    if search_query is not None and not skip_web:
+        from research_scout import public_search_query
+        hints["candidate_public_query"] = public_search_query(search_query)
+    if sources:
+        hints["preferred_source_domains"] = sources
+    intel_context = ("OPTIONAL RETRIEVAL HINTS (NOT RETRIEVED EVIDENCE):\n" +
+                     json.dumps(hints, ensure_ascii=False)) if hints else ""
     memory_context = memory.load_memory_context(topic=goal)
 
     ui.print_phase(2, "Planning the evidence review")
     ui.notice("dag_decomposing", f"  Building a {mode} plan with at most {max_tasks} tasks.")
-    decomposer = RecursiveDecomposer(swarm=swarm, max_depth=max_depth, mode=mode, max_tasks=max_tasks)
+    def persist_planning(trace):
+        if state_file:
+            path = Path(state_file).with_suffix(".planning.json")
+            _write_artifact(path, json.dumps({"planning": trace, "usage_calls": list(getattr(swarm, "usage_calls", []))}, ensure_ascii=False, indent=2))
+    decomposer = RecursiveDecomposer(swarm=swarm, max_depth=max_depth, mode=mode, max_tasks=max_tasks,
+        recursive_plan=recursive_plan, planning_budget=planning_budget,
+        on_planning_checkpoint=persist_planning)
     task_graph = await decomposer.decompose_goal(
         goal=goal,
         intelligence_context=intel_context,
         memory_context=memory_context,
+        task_brief=task_brief,
     )
     valid, error = task_graph.validate_acyclic_and_integrity()
     if not task_graph.nodes or not valid:
@@ -444,6 +432,13 @@ async def _run_plan_stage(goal: str, output_path: str, model: str, backend: str,
         "intel_brief": intel_brief.to_dict(),
         "intel_context": intel_context,
         "memory_context": memory_context,
+        "task_brief": getattr(decomposer, "task_brief", task_brief),
+        "task_brief_origin": "host" if task_brief is not None else "planner" if getattr(decomposer, "task_brief", None) else "worker_pending",
+        "retrieval_policy": "interpret_then_retrieve",
+        "retrieval_hints": hints,
+        "recursive_plan": recursive_plan,
+        "planning_trace": getattr(decomposer, "planning_trace", None),
+        "planning_budget": planning_budget,
         "graph": task_graph.to_dict(),
         "task_graph_obj": task_graph,
         "tasks": [
@@ -496,6 +491,22 @@ async def _run_execute_stage(state: Dict[str, Any], state_file: Optional[str], b
             await swarm.check_cli()
 
     task_graph = state.get("task_graph_obj") or TaskGraph.from_dict(state["graph"])
+    if (state.get("planning_trace") or {}).get("simplicity_policy") == "review_and_repair_v1":
+        unreviewed = [n.id for n in task_graph.nodes.values()
+                      if n.input_artifacts.get("task_contract", {}).get("simplicity_review", {}).get("decision") != "ACCEPT"]
+        if unreviewed:
+            raise ConfigurationRequired("Recursive tasks require accepted simplicity reviews before execution: " + ", ".join(unreviewed))
+    blocked = [n.id for n in task_graph.nodes.values() if n.input_artifacts.get("task_contract", {}).get("blocked_by")]
+    if blocked:
+        raise ConfigurationRequired("Recursive plan has unresolved required inputs; review the interpretation and blocked_by fields before creating a new plan: " + ", ".join(blocked))
+    from post_worker import result_gate_policy, result_repair_policy
+    swarm.batch_result_checks = True
+    for node in task_graph.nodes.values():
+        if node.input_artifacts.get("worker_wrapper") == "atomic_v1":
+            from source_binding import bind_captured_sources
+            bind_captured_sources(node, state.get("research_config", {}))
+            node.input_artifacts["result_gate"] = result_gate_policy()
+            node.input_artifacts["result_repair"] = result_repair_policy()
     blackboard = Blackboard(session_id=str(int(time.time())))
     start_exec_time = time.time()
     retained = state.get("completed_data", {})
@@ -506,6 +517,8 @@ async def _run_execute_stage(state: Dict[str, Any], state_file: Optional[str], b
 
     def persist_result(node, envelope):
         state["completed_data"][node.id] = envelope
+        if envelope.get("result_check"):
+            state.setdefault("result_checks", {})[node.id] = envelope["result_check"]
         state["graph"] = task_graph.to_dict()
         state["blackboard_artifacts"] = blackboard.artifacts
         state["verified_evidence_hashes"] = list(blackboard.verified_evidence_store)
@@ -514,6 +527,14 @@ async def _run_execute_stage(state: Dict[str, Any], state_file: Optional[str], b
             _save_state(state, state_file)
 
     ui.print_phase(3, "Swarm of Runes (Parallel Execution & Evidence Contracts)")
+
+    def persist_attempt(node):
+        state["graph"] = task_graph.to_dict()
+        state["usage_calls"] = list(getattr(swarm, "usage_calls", []))
+        ui.emit("result_attempt", node_id=node.id, retry_count=node.retry_count,
+                status=node.result_attempts[-1].get("status") if node.result_attempts else "repairing")
+        if state_file:
+            _save_state(state, state_file)
 
     def on_task_finish(node: TaskNode, res: SwarmResult, contract: Optional[Any] = None):
         if res.status != "SUCCESS":
@@ -541,6 +562,7 @@ async def _run_execute_stage(state: Dict[str, Any], state_file: Optional[str], b
             graph=task_graph, blackboard=blackboard, jev_gate=None,
             on_task_start=ui.display_agent_submitted, on_task_finish=on_task_finish,
             retained_results=retained, on_result_commit=persist_result,
+            on_result_attempt=persist_attempt,
             **({"research_dispatch": research_dispatch} if research_dispatch else {}),
         )
     finally:
@@ -633,7 +655,7 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
     memory = JarvisMemory(state.get("memory_path"), mode=state.get("memory_mode", "read"), workspace=Path.cwd())
 
     is_single = state.get("mode") == "single"
-    ui.print_phase(4, "Preparing the single-worker report" if is_single else "Adversarial Trial & Red-Team Reflection")
+    ui.print_phase(4, "Preparing the single-worker report" if is_single else "Assembling the final answer")
 
     red_team_critiques = []
 
@@ -643,34 +665,53 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
         if "red-team" in role.lower() or "critic" in role.lower():
             red_team_critiques.append(res_content)
 
-    # Supply the full evidence set, including findings a draft may have omitted.
-    combined_draft = "\n\n".join(
-        f"TASK {node_id} ({data.get('role', 'Worker')}): {data.get('title', '')}\n"
-        + (json.dumps(data['result'], ensure_ascii=False) if isinstance(data['result'], (dict, list)) else str(data['result']))
-        for node_id, data in completed_data.items()
-    )
-    combined_draft += "\n\nSOURCE RETRIEVAL RECORDS AND GAPS:\n" + json.dumps(state.get("intel_brief", {}), ensure_ascii=False)
-    combined_draft += "\n\nSCOUT CONTEXT:\n" + intel_context
-
-    combined_critique = "\n\n".join(red_team_critiques) if red_team_critiques else "No explicit critique was produced; identify and challenge gaps independently."
+    combined_critique = "\n\n".join(red_team_critiques)
     ui.emit("critique_collected", critique_count=len(red_team_critiques),
             output_excerpt=combined_critique[:600] if red_team_critiques else "")
     if not is_single:
-        ui.notice("reflection_started", "  Synthesizing findings and the critic's corrections.")
+        ui.notice("reflection_started", "  Assembling supplied findings, checks and limitations.")
 
     if state.get("mode") == "single":
         from research_contract import normalize_worker_result
         hardened_solution = normalize_worker_result(next(iter(completed_data.values()))["result"])["answer"]
         reflection = "Single-worker report; no separate critique or reflective model call was performed."
     else:
-        gepa = GepaOptimizer(swarm=swarm, critic_model=active_model)
-        hardened_solution, reflection = await gepa.reflective_evolve(
-            candidate_content=combined_draft, goal=goal, critique_points=combined_critique,
-        )
+        from post_worker import synthesize, synthesis_context, check_final_answer
+        try:
+            synthesis_result, context = await synthesize(
+                swarm, synthesis_context(state), model=active_model,
+                max_answer_words=300 if state.get("mode") == "review" else None,
+            )
+            hardened_solution = synthesis_result["answer"]
+            reflection = "Answer assembled from supplied findings; no separate reflective model call."
+            if synthesis_result["limitations"]:
+                reflection += "\n" + "\n".join(synthesis_result["limitations"])
+            state["synthesis_result"] = synthesis_result
+            state["synthesis_context"] = context
+            state.pop("final_answer_check", None)
+            ui.emit("final_check_started")
+            try:
+                final_check = await check_final_answer(swarm, context, synthesis_result, model=active_model)
+            except (Exception, asyncio.CancelledError) as exc:
+                state["rejected_synthesis"] = {"result": synthesis_result, "checker_error": str(exc),
+                                               "reason": "Final checker failed to return a valid verdict"}
+                raise
+            state["final_answer_check"] = final_check
+            ui.emit("final_check_completed", verdict=final_check["verdict"], issues=final_check["issues"])
+            if final_check["verdict"] != "PASS":
+                state["rejected_synthesis"] = {"result": synthesis_result, "result_check": final_check,
+                                               "reason": "Final answer acceptance check failed"}
+                from backend import WorkerFailure
+                raise WorkerFailure("Final answer", "Acceptance check failed: " + "; ".join(final_check["issues"]))
+            state.pop("rejected_synthesis", None)
+        finally:
+            state["usage_calls"] = list(getattr(swarm, "usage_calls", []))
+            if state_file:
+                _save_state(state, state_file)
     ui.emit("reflection_skipped" if is_single else "reflection_completed", output_excerpt=str(reflection)[:600])
 
     if ui.progress_format == "terminal":
-        msg = "The single-worker findings are ready for publication." if is_single else "Mímir's reflective revision is ready for publication."
+        msg = "The single-worker findings are ready for publication." if is_single else "Mímir's assembled answer is ready for publication."
         if ui.console:
             ui.console.print(f"  [green][OK][/green] [bold]{msg}[/bold]")
             ui._flush()
@@ -685,7 +726,7 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
     total_elapsed += time.monotonic() - synthesis_started_at
 
     mimir_persona_intro = (
-        "> *Mímir records the worker findings and adversarial reflection. "
+        "> *Mímir records the worker findings and supplied checks. "
         "Source retrieval, model critique, and output hashes do not independently verify factual claims.*\n\n"
     )
     report_lines = [
@@ -696,8 +737,8 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
         "## 1. Executive Summary & Reviewed Findings",
         hardened_str,
         "\n---\n",
-        "## 2. Mímir's Reflection & Adversarial Analysis (Red-Team)",
-        f"**Reflection Notes:**\n{reflection_str}\n" if reflection_str else "",
+        "## 2. Assembly notes and limitations",
+        f"**Assembly Notes:**\n{reflection_str}\n" if reflection_str else "",
         f"**Identified Pitfalls:**\n{combined_critique}\n" if combined_critique else "",
         "\n---\n",
         "## 3. Empirical Intelligence (Omni-Channel Evidence)",
@@ -735,6 +776,14 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
              "usage_complete": bool(calls) and all((c.get("tokens_used") or 0) > 0 for c in calls),
              "calls": calls, "billed_cost": None}
     usage["worker_calls"] = len(calls)
+    usage["token_scope"] = "Cumulative reported API/runtime usage, including cached input; not unique context or verified billed tokens."
+    detailed_calls = [c for c in calls if c.get("usage_details")]
+    usage["calls_with_token_breakdown"] = len(detailed_calls)
+    usage["known_token_breakdown"] = {
+        name: sum(c["usage_details"].get(name, 0) for c in detailed_calls)
+        for name in ("input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens")
+        if any(name in c["usage_details"] for c in detailed_calls)
+    }
     usage["model_calls_scope"] = "Adapter invocations, not provider inference requests; native tool continuations may make multiple model requests."
     research_lines = ["\n## Evidence coverage and limitations\n",
                       f"Record coverage: **{research['coverage']}**. Independent factual validation: **not performed**.\n"]
@@ -754,9 +803,15 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
         "worker_effort": active_effort,
         "elapsed_seconds": total_elapsed,
         "intel_brief": state.get("intel_brief", {}),
+        "task_brief": state.get("task_brief"),
+        "task_brief_origin": state.get("task_brief_origin", "legacy"),
+        "retrieval_policy": state.get("retrieval_policy", "legacy"),
         "task_results": completed_data,
         "reflection": reflection,
         "hardened_solution": hardened_solution,
+        "synthesis_result": state.get("synthesis_result"),
+        "synthesis_context": state.get("synthesis_context"),
+        "final_answer_check": state.get("final_answer_check"),
         "blackboard_artifacts": bb_artifacts,
         "verified_evidence_hashes": bb_hashes,
         "output_identity_hashes": bb_hashes,
@@ -854,6 +909,9 @@ async def run_mimir(
     research_budget: Optional[dict] = None,
     source_manifest: Optional[str] = None,
     program_manifest: Optional[str] = None,
+    task_brief: Optional[Dict[str, Any]] = None,
+    recursive_plan: Optional[bool] = None,
+    planning_budget: Optional[dict] = None,
 ):
     if progress_format not in ("terminal", "jsonl", "events"):
         raise ValueError("Progress format must be terminal, jsonl or events.")
@@ -871,6 +929,21 @@ async def run_mimir(
         candidate_lock.__enter__()
         checkpoint_lock = candidate_lock
         state = _load_state(state_file, phase) if phase in {"execute", "synthesize"} else {}
+        from task_brief import validate_task_brief
+        task_brief = validate_task_brief(task_brief)
+        if state and task_brief is not None and task_brief != state.get("task_brief"):
+            raise ConfigurationRequired("Task brief is fixed by the plan; start a new run to change it.")
+        if state and recursive_plan is not None and recursive_plan != state.get("recursive_plan", False):
+            raise ConfigurationRequired("Recursive planning policy is fixed by the plan")
+        recursive_plan = recursive_plan if recursive_plan is not None else state.get("recursive_plan", False)
+        if type(recursive_plan) is not bool:
+            raise ConfigurationRequired("Recursive planning selection must be a boolean")
+        if planning_budget is not None:
+            from recursive_planner import validate_planning_budget
+            planning_budget = validate_planning_budget(planning_budget)
+        if state and planning_budget is not None and planning_budget != state.get("planning_budget"):
+            raise ConfigurationRequired("Planning budget is fixed by the plan")
+        planning_budget = planning_budget or state.get("planning_budget")
         if state and ((mode is not None and mode != state.get("mode", mode)) or
                       (max_tasks is not None and max_tasks != state.get("max_tasks", max_tasks))):
             raise ConfigurationRequired("Execution policy and task cap are fixed by the plan; start a new run to change them.")
@@ -920,7 +993,10 @@ async def run_mimir(
             raise ValueError("Report, JSON sidecar and state paths must be distinct; use a .md report path.")
         # Older checkpoints were created by CLI adapters. Preserve that contract
         # when no explicit invocation/environment transport replaces it.
-        selected_transport = worker_transport or os.environ.get("MIMIR_WORKER_TRANSPORT") or (state.get("worker_transport", "cli") if state and resume_same_backend else None) or "native"
+        selected_transport = worker_transport or os.environ.get("MIMIR_WORKER_TRANSPORT") or (state.get("worker_transport", "cli") if state and resume_same_backend else None) or (
+            "hybrid" if resolved_backend in {"codex", "agy", "claude", "opencode"} else "native")
+        if research_config["program"] != "native" and selected_transport != "native":
+            raise ConfigurationRequired("DSPy/RLM currently requires explicit native transport; hybrid compatibility is not validated")
         factory = worker_factory or create_swarm_backend
         swarm = factory(backend_type=resolved_backend, model=resolved_model,
                                      max_concurrency=max_concurrency, effort=resolved_effort,
@@ -940,11 +1016,17 @@ async def run_mimir(
                                  journal=Path(state_file).with_suffix(".operations.jsonl") if research_config["budget"] else None,
                                  policy=research_identity if research_config["program"] != "native" or captured_sources.records else None,
                                  recover=bool(state))
+        from prompt_data import model_view
+        swarm.available_sources = model_view([{**({k: v for k, v in record.items() if k != "text"} if len(record["text"]) > 16000 else record),
+            "text_delivery": "inline" if len(record["text"]) <= 16000 else "requires_bounded_excerpt",
+            "status": research_config.get("source_statuses", {}).get(
+            record["id"], "user_supplied" if record["retrieval_type"] == "local_file" else "retrieved")}
+            for record in captured_sources.to_list()], captured_sources.to_list())
         if mode == "review" and research_config["budget"]:
-            swarm.reserve_for_review = 2
+            swarm.reserve_for_review = 3
         elif mode == "swarm" and research_config["budget"]:
-            swarm.reserve_for_review = 1
-        if hasattr(swarm, "help_command") or getattr(swarm, "transport", None) in ("sdk", "server"):
+            swarm.reserve_for_review = 2
+        if hasattr(swarm, "help_command") or getattr(swarm, "transport", None) in ("sdk", "server", "hybrid"):
             await swarm.check_cli()
 
         if state:
@@ -964,7 +1046,8 @@ async def run_mimir(
                 skip_web=skip_web, max_depth=max_depth, sources=sources, enable_jev=enable_jev,
                 effort=resolved_effort, worker_timeout=worker_timeout, max_concurrency=max_concurrency,
                 state_file=state_file, ui=ui, swarm=swarm, search_query=search_query, worker_transport=selected_transport,
-                mode=mode, max_tasks=max_tasks, memory_mode=memory_mode, memory_path=memory_path, max_context_chars=max_context_chars
+                mode=mode, max_tasks=max_tasks, memory_mode=memory_mode, memory_path=memory_path, max_context_chars=max_context_chars,
+                task_brief=task_brief, recursive_plan=recursive_plan, planning_budget=planning_budget
             )
             state.update(research_program=research_config["program"], research_config=research_config,
                          research_identity=research_identity)
@@ -994,7 +1077,8 @@ async def run_mimir(
                 skip_web=skip_web, max_depth=max_depth, sources=sources, enable_jev=enable_jev,
                 effort=resolved_effort, worker_timeout=worker_timeout, max_concurrency=max_concurrency,
                 state_file=state_file, ui=ui, swarm=swarm, search_query=search_query, worker_transport=selected_transport,
-                mode=mode, max_tasks=max_tasks, memory_mode=memory_mode, memory_path=memory_path, max_context_chars=max_context_chars
+                mode=mode, max_tasks=max_tasks, memory_mode=memory_mode, memory_path=memory_path, max_context_chars=max_context_chars,
+                task_brief=task_brief, recursive_plan=recursive_plan, planning_budget=planning_budget
             )
             plan_state.update(research_program=research_config["program"], research_config=research_config,
                               research_identity=research_identity)

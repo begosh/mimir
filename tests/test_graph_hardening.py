@@ -153,7 +153,9 @@ class DecisionAndDecompositionTests(unittest.IsolatedAsyncioTestCase):
     async def test_valid_decomposition_retains_dependency_order(self):
         tasks = [{"id": "t2", "role": "Red-Team-Critic", "title": "Critique", "objective": "Challenge findings", "dependencies": ["t1"]},
                  {"id": "t1", "role": "Domain-Analyst", "title": "Analyze", "objective": "Review code", "dependencies": []}]
-        graph = await RecursiveDecomposer(FakeWorker({"tasks": tasks}), mode="swarm").decompose_goal("review")
+        brief = {"outcome": "Review", "constraints": [], "components": ["Analyze", "Critique"],
+                 "evidence_needs": ["Current behavior"], "missing_information": []}
+        graph = await RecursiveDecomposer(FakeWorker({"tasks": tasks, "task_brief": brief}), mode="swarm").decompose_goal("review")
         self.assertEqual([[n.id for n in tier] for tier in graph.get_execution_tiers()], [["t1"], ["t2"]])
 
     async def test_evidence_screen_fails_closed_on_bad_or_failed_worker_result(self):
@@ -245,7 +247,9 @@ class DecisionAndDecompositionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_decomposer_preserves_required_evidence_metadata(self):
         task = {"id": "source", "role": "Domain-Analyst", "title": "Read evidence", "objective": "Retrieve sources", "required_evidence": True}
-        graph = await RecursiveDecomposer(FakeWorker({"tasks": [task]}), mode="swarm").decompose_goal("review")
+        brief = {"outcome": "Review", "constraints": [], "components": ["Retrieve sources"],
+                 "evidence_needs": ["Primary sources"], "missing_information": []}
+        graph = await RecursiveDecomposer(FakeWorker({"tasks": [task], "task_brief": brief}), mode="swarm").decompose_goal("review")
         self.assertTrue(graph.nodes["source"].required_evidence)
         with self.assertRaisesRegex(ValueError, "required_evidence"):
             await RecursiveDecomposer(FakeWorker({"tasks": [{**task, "required_evidence": "true"}]}), mode="swarm").decompose_goal("review")

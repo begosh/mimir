@@ -148,6 +148,9 @@ class SwarmResult:
     tokens_used: int = 0
     operation_id: Optional[str] = None
     trace_path: Optional[str] = None
+    usage_details: Optional[Dict[str, int]] = None
+    timing: Optional[Dict[str, float]] = None
+    rejected_output: Optional[Dict[str, Any]] = None
 
 
 class BaseSwarmBackend(ABC):
@@ -345,6 +348,7 @@ class BaseSwarmBackend(ABC):
         retained_results: Optional[Dict[str, Any]] = None,
         on_result_commit: Optional[Callable[[Any, Dict[str, Any]], None]] = None,
         research_dispatch: Optional[Callable] = None,
+        on_result_attempt: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """Run dependency-ready tasks and retain outputs through one scheduler."""
         from scheduler import execute_graph
@@ -353,6 +357,7 @@ class BaseSwarmBackend(ABC):
             on_task_start=on_task_start, on_task_finish=on_task_finish,
             retained_results=retained_results, on_result_commit=on_result_commit,
             research_dispatch=research_dispatch,
+            on_result_attempt=on_result_attempt,
         )
 
 
@@ -1191,16 +1196,40 @@ def create_swarm_backend(
     Factory function for instantiating the optimal swarm backend.
     Auto-detects based on environment if backend_type is None or 'auto'.
     """
-    transport = worker_transport or os.environ.get("MIMIR_WORKER_TRANSPORT") or "native"
-    if transport not in ("native", "cli"):
-        raise ValueError("Worker transport must be native or cli.")
+    transport = worker_transport or os.environ.get("MIMIR_WORKER_TRANSPORT")
     chosen = (backend_type or "auto").lower()
     if chosen == "auto":
         chosen = os.environ.get("MIMIR_BACKEND", "auto").lower()
     chosen = {"antigravity": "agy", "openai-codex": "codex", "claude-code": "claude"}.get(chosen, chosen)
+    transport = transport or ("hybrid" if chosen in {"agy", "codex", "claude", "opencode"} else "native")
+    if transport not in ("native", "cli", "hybrid"):
+        raise ValueError("Worker transport must be native, cli or hybrid.")
     selected_effort = effort or os.environ.get("MIMIR_EFFORT", "low")
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("Worker timeout must be positive.")
+    if transport == "hybrid":
+        selected_model = model or os.environ.get(f"MIMIR_{chosen.upper()}_MODEL") or os.environ.get("MIMIR_MODEL")
+        if chosen not in {"agy", "codex", "claude", "opencode"} or not selected_model:
+            raise ValueError("Hybrid transport requires a selected tool runtime and explicit API model ID")
+        from text_api_backend import TextResponsesBackend, HybridSwarmBackend
+        text = TextResponsesBackend(selected_model, effort=selected_effort, max_concurrency=max_concurrency)
+        tool_model = os.environ.get("MIMIR_TOOL_MODEL") or selected_model
+        if chosen == "opencode" and "/" not in tool_model:
+            # Reuse the configured provider namespace, never its different model.
+            config_path = Path(os.environ.get("OPENCODE_CONFIG") or Path.home() / ".config" / "opencode" / "opencode.json")
+            try:
+                configured_model = json.loads(config_path.read_text(encoding="utf-8-sig")).get("model", "")
+                if "/" in configured_model:
+                    tool_model = configured_model.split("/", 1)[0] + "/" + selected_model
+            except (OSError, ValueError, TypeError):
+                pass  # Tool admission later reports missing provider/model.
+        if tool_model.split("/", 1)[-1] != selected_model:
+            raise ValueError("Tool model must identify the same selected API model; no model substitution")
+        result = HybridSwarmBackend(None, text, tool_factory=lambda: create_swarm_backend(
+            chosen, tool_model, max_concurrency, selected_effort, timeout_seconds, worker_transport="native"),
+            tool_backend_name=chosen, tool_model=tool_model)
+        result.timeout_seconds = timeout_seconds
+        return result
     if chosen in ("agy", "codex", "claude") and selected_effort not in ("low", "medium", "high", "xhigh", "max"):
         raise ValueError("CLI effort must be low, medium, high, xhigh, or max. OpenCode accepts provider variants or none.")
 
@@ -1245,6 +1274,13 @@ def create_swarm_backend(
         result = OpenAISwarmBackend(default_model=selected_model, api_key="ollama",
                                    base_url=ollama_url if ollama_url.endswith("/v1") else ollama_url + "/v1",
                                    max_concurrency=max_concurrency)
+    elif chosen == "responses":
+        if not selected_model:
+            raise ValueError("Responses requires an explicit API model ID")
+        from text_api_backend import TextResponsesBackend
+        result = TextResponsesBackend(selected_model, effort=selected_effort, max_concurrency=max_concurrency)
+        result.timeout_seconds = timeout_seconds
+        return result
     elif chosen in ("openai", "vllm", "openrouter"):
         result = OpenAISwarmBackend(default_model=selected_model or "gpt-4o-mini", max_concurrency=max_concurrency)
     elif chosen == "anthropic":

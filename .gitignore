@@ -23,9 +23,9 @@ dist/
 *.db
 
 # Temporary outputs
-artifacts/*.json
-artifacts/*.md
+artifacts/*
 !artifacts/README.md
+.pytest_cache/
 
 # Operating System files
 .DS_Store
@@ -50,3 +50,8 @@ desktop.ini
 .mcp.json
 .agents/mcp_config.json
 opencode.jsonc
+
+# Local research packets, captures, profiles and installed third-party skills
+.mimir/
+.agents/skills/
+skills-lock.json

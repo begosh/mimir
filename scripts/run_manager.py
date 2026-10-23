@@ -138,9 +138,20 @@ class RunManager:
                     memory_mode: str | None = None, memory_path: str | None = None,
                     max_context_chars: int | None = None,
                     research_program: str | None = None, research_budget: dict | None = None,
-                    source_manifest: str | None = None, program_manifest: str | None = None) -> dict:
+                    source_manifest: str | None = None, program_manifest: str | None = None,
+                    task_brief: dict | None = None, recursive_plan: bool | None = None,
+                    planning_budget: dict | None = None, max_depth: int = 2) -> dict:
         if self._closed:
             raise RuntimeError("Run manager is closed.")
+        from task_brief import validate_task_brief
+        task_brief = validate_task_brief(task_brief)
+        if recursive_plan is not None and type(recursive_plan) is not bool:
+            raise ValueError("Recursive planning selection must be boolean")
+        if planning_budget is not None:
+            from recursive_planner import validate_planning_budget
+            planning_budget = validate_planning_budget(planning_budget)
+        if type(max_depth) is not int or not 1 <= max_depth <= 4:
+            raise ValueError("Planning depth must be within [1, 4]")
         if research_program not in {None, "native", "dspy", "rlm"}:
             raise ValueError("Research program must be native, dspy or rlm")
         if research_budget is not None:
@@ -150,8 +161,8 @@ class RunManager:
             raise ValueError("Choose plan, execute or synthesize.")
         if sum(not task.done() for task in self._tasks.values()) >= self.max_active:
             raise RunBusyError("Too many active phases; wait for completion.")
-        if worker_transport not in {None, "native", "cli"}:
-            raise ValueError("Worker transport must be native or cli.")
+        if worker_transport not in {None, "native", "cli", "hybrid"}:
+            raise ValueError("Worker transport must be native, cli or hybrid.")
         if worker_timeout is not None and (not math.isfinite(worker_timeout) or worker_timeout <= 0 or worker_timeout > 3600):
             raise ValueError("Worker timeout must be positive and at most 3600 seconds.")
         if max_concurrency is not None and (type(max_concurrency) is not int or not 1 <= max_concurrency <= 32):
@@ -209,7 +220,8 @@ class RunManager:
                            mode=mode, max_tasks=max_tasks, memory_mode=memory_mode,
                            memory_path=memory_path, max_context_chars=max_context_chars,
                            research_program=research_program, research_budget=research_budget,
-                           source_manifest=source_manifest, program_manifest=program_manifest,
+                           source_manifest=source_manifest, program_manifest=program_manifest, task_brief=task_brief,
+                           recursive_plan=recursive_plan, planning_budget=planning_budget, max_depth=max_depth,
                            state_file=str(directory / "checkpoint.json"),
                            output_path=str(directory / "report.md"), progress_format="events")
             task = asyncio.create_task(self._execute(record, options, lease))

@@ -111,6 +111,11 @@ def prepare_research(program, budget, source_manifest, instruction_manifest, sta
             raise ConfigurationRequired("Instruction manifest changed; start a new run")
         if source_manifest:
             current = SourceStore.capture(source_manifest)
+            supplied_manifest = json.loads(Path(source_manifest).read_text(encoding="utf-8-sig"))
+            supplied_statuses = {s["id"]: s.get("status", "user_supplied" if "path" in s else "retrieved")
+                                 for s in supplied_manifest["sources"]}
+            if supplied_statuses != config.get("source_statuses", supplied_statuses):
+                raise ConfigurationRequired("Source status changed; start a new run")
             saved = SourceStore(config["sources"])
             if [(r["id"], r["locator"], r["sha256"]) for r in current.to_list()] != [(r["id"], r["locator"], r["sha256"]) for r in saved.to_list()]:
                 raise ConfigurationRequired("Source manifest changed; start a new run")
@@ -123,6 +128,10 @@ def prepare_research(program, budget, source_manifest, instruction_manifest, sta
                   "sources": sources.to_list(),
                   "instructions": load_instruction_manifest(instruction_manifest) if instruction_manifest else None,
                   "interpreter_policy": "deno-no-host-access-v1", "dspy_version": "3.4.1"}
+        if source_manifest:
+            manifest_data = json.loads(Path(source_manifest).read_text(encoding="utf-8-sig"))
+            config["source_statuses"] = {s["id"]: s.get("status", "user_supplied" if "path" in s else "retrieved")
+                                         for s in manifest_data["sources"]}
     if program != "native" and not research_runtime()["ready"]:
         raise ConfigurationRequired("Research dependencies unavailable or unqualified; install requirements-research.txt in MIMIR_RESEARCH_PYTHON or .venv-research")
     sources = SourceStore(config["sources"])
@@ -159,6 +168,15 @@ class ResearchDispatcher:
         self.selected = self.standard if context.config["program"] == "native" else DspyResearchProgram()
 
     async def __call__(self, node, prompt):
+        if node.input_artifacts.get("worker_wrapper") == "atomic_v1" and self.context.config["program"] == "native":
+            from atomic_worker import TEXT_ONLY
+            if node.input_artifacts["task_contract"]["operation"] in TEXT_ONLY:
+                native = getattr(self.context.broker, "native", self.context.broker)
+                if not callable(getattr(native, "spawn_restricted", None)):
+                    raise ConfigurationRequired("Atomic supplied-input workers require a text-only adapter")
+                return await self.context.broker.spawn_restricted(prompt=prompt, role=node.role,
+                    model=self.context.broker.default_model, effort=self.context.broker.default_effort,
+                    json_schema=node.json_schema)
         # Critics retain native research/tools; investigators use selected program.
         program = self.standard if "critic" in node.role.lower() else self.selected
         outcome = await program.run(ResearchRequest(node.id, prompt, node.role,

@@ -83,19 +83,17 @@ asyncio.run(run())
         self.assertNotIn("private prompt", final_output)
         self.assertEqual([e["sequence"] for e in events], list(range(1, len(events) + 1)))
 
-    async def test_synchronous_search_keeps_streaming_and_failure_stops_heartbeat(self):
+    async def test_planning_keeps_streaming_without_search_and_failure_stops_heartbeat(self):
         backend = ClaudeCodeSwarmBackend(claude_path="claude")
         async def check():
             return {"model_configured": True}
         backend.check_cli = check
         search_started = threading.Event()
         release_search = threading.Event()
-        def blocked_search(scout, goal, custom_domains=None):
-            search_started.set()
-            if not release_search.wait(timeout=3):
-                raise RuntimeError("fixture timed out")
-            return IntelligenceBrief(topic=goal)
         async def fail_decompose(*args, **kwargs):
+            search_started.set()
+            while not release_search.is_set():
+                await asyncio.sleep(.01)
             raise RuntimeError("fixture decomposition failed")
         heartbeat = mimir.MimirConsole.heartbeat
         async def fast_heartbeat(ui):
@@ -106,7 +104,7 @@ asyncio.run(run())
             memory = JarvisMemory(str(Path(directory) / "LEARNINGS.md"))
             with patch.object(mimir, "create_swarm_backend", return_value=backend), \
                  patch.object(mimir, "JarvisMemory", return_value=memory), \
-                 patch.object(mimir.ResearchScout, "conduct_deep_scout", blocked_search), \
+                 patch.object(mimir.ResearchScout, "conduct_deep_scout", side_effect=AssertionError("Planning must not search")), \
                  patch.object(mimir.RecursiveDecomposer, "decompose_goal", fail_decompose), \
                  patch.object(mimir.MimirConsole, "heartbeat", fast_heartbeat), redirect_stdout(stream):
                 run = asyncio.create_task(mimir.run_mimir(
@@ -121,7 +119,7 @@ asyncio.run(run())
                     self.assertFalse(run.done())
                     events = [json.loads(line) for line in stream.getvalue().splitlines()]
                     waiting = next(e for e in events if e["event"] == "run_waiting")
-                    self.assertEqual(waiting["phase"], 1)
+                    self.assertEqual(waiting["phase"], 2)
                     self.assertNotIn("research_completed", [e["event"] for e in events])
                 finally:
                     release_search.set()

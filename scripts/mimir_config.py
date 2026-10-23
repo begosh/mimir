@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 CLI_BACKENDS = ("agy", "codex", "claude", "opencode")
-HTTP_BACKENDS = ("openai", "anthropic", "ollama")
+HTTP_BACKENDS = ("responses", "openai", "anthropic", "ollama")
 BACKENDS = CLI_BACKENDS + HTTP_BACKENDS
 DEFAULT_MODELS = {"agy": "gemini-3.8-flash-low", "claude": "haiku",
                   "openai": "gpt-4o-mini", "anthropic": "claude-3-5-haiku-20241022"}
@@ -48,8 +48,8 @@ def validate(data: Any) -> dict:
         raise ConfigurationRequired("Unknown saved backend; choose a supported CLI or HTTP backend.")
     if not isinstance(model, str) or not model.strip() or len(model) > 200:
         raise ConfigurationRequired("Choose an explicit worker model before saving setup.")
-    if backend == "opencode" and ("/" not in model or not all(model.split("/", 1))):
-        raise ConfigurationRequired("OpenCode needs a provider/model.")
+    if backend == "opencode" and "/" in model and not all(model.split("/", 1)):
+        raise ConfigurationRequired("OpenCode provider/model cannot have an empty component.")
     if not isinstance(effort, str) or not effort or len(effort) > 100:
         raise ConfigurationRequired("Choose worker effort or an OpenCode variant.")
     if backend in CLI_BACKENDS[:3] and effort not in ("low", "medium", "high", "xhigh", "max"):
@@ -103,7 +103,8 @@ def config_status(host: Optional[str] = None, path: Optional[Path] = None,
             "settings": saved, "available_clis": available,
             "suggested_backend": suggested, "confirmation_required": saved is None,
             "suggested_model": suggested_model, "suggested_effort": "low" if suggested else None,
-            "note": "CLI discovery does not verify login, model availability or persistence."}
+            "default_text_transport": "responses", "default_tool_transport": "native",
+            "note": "New tool-runtime runs use direct text API calls; API credentials and explicit API model ID required. CLI discovery verifies neither access route."}
 
 
 def resolve_execution(backend: Optional[str], model: Optional[str], effort: Optional[str],

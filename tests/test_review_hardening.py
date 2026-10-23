@@ -129,7 +129,7 @@ class ReviewHardeningTests(unittest.IsolatedAsyncioTestCase):
             return {}
         async def spawn(prompt, role="Worker", **kwargs):
             self.assertIn("LAST REQUIRED SOURCE", prompt)
-            return SwarmResult(role, "SUCCESS", {"hardened_solution": "Reviewed findings", "reflection": "Source retained"}, "raw")
+            return SwarmResult(role, "SUCCESS", {"verdict":"PASS","issues":[]} if role == "Mimir-Final-Checker" else {"answer": "Reviewed findings", "limitations": ["Source retained"]}, "raw")
         backend.check_cli, backend.spawn = check, spawn
         with tempfile.TemporaryDirectory() as directory:
             state, target = self.make_state(directory, "executed")
@@ -155,7 +155,7 @@ class ReviewHardeningTests(unittest.IsolatedAsyncioTestCase):
             before = memory.memory_path.read_bytes()
             stream = io.StringIO()
             with patch.dict(os.environ, {}, clear=True), patch.object(mimir, "create_swarm_backend", return_value=backend), patch.object(mimir, "JarvisMemory", return_value=memory), redirect_stdout(stream):
-                with self.assertRaisesRegex(RuntimeError, "reflection worker failed: authentication failed"):
+                with self.assertRaisesRegex(RuntimeError, "synthesis worker failed: authentication failed"):
                     await mimir.run_mimir(phase="synthesize", state_file=str(target), progress_format="jsonl")
             self.assertFalse((Path(directory) / "planned.md").exists())
             self.assertEqual(memory.memory_path.read_bytes(), before)

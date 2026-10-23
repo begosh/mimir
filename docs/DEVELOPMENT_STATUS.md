@@ -1,8 +1,19 @@
+# Development update: direct text workers, 2026-10-23
+
+Direct API calls now execute text-only work by default. Native runtimes are lazy
+tool executors. The same six-task fixture used 91.2% fewer reported tokens through
+direct requests. Planning simplification and OpenCode tool readiness remain open.
+See [execution conclusions](EXECUTION_CONCLUSIONS_2026-10-23.md) for measured
+results, errors, scope and delivery validation.
+
+The notes below describe earlier implementation snapshots and qualification.
+Their all-native execution statements do not describe the current default.
+
 # Development update: work in progress, very BETA
 
 This update consolidates the engine, native worker integrations, evidence and
-recovery hardening, optional DSPy/RLM/GEPA implementation, and the Mycroft skill
-experiment. These are experimental mechanisms with bounded qualification, not a
+recovery hardening, and optional DSPy/RLM/GEPA implementation.
+These are experimental mechanisms with bounded qualification, not a
 production release or a claim of general research superiority. Changes to APIs,
 checkpoint formats, dependencies and host instructions should be expected.
 
@@ -38,9 +49,6 @@ checkpoint formats, dependencies and host instructions should be expected.
   validates links and targets, and handles temporary Windows replacement failures.
   Native worker requirements and optional research requirements are separate files.
   Skill installation does not install a virtual environment or configure host MCP.
-- The optional presentation builder requires an explicitly supplied presentation
-  helper/template; its tests use a fixture. No generated deck or company template
-  is distributed in this update.
 
 ## Evidence, learning and observable progress
 
@@ -86,44 +94,6 @@ checkpoint formats, dependencies and host instructions should be expected.
 [dated qualification](DSPY_RLM_IMPLEMENTATION_2026-10-22.md) contain setup,
 budgets, implementation references and practical limits.
 
-## Mycroft experiment
-
-`mycroft/` contains three skills, seven canonical roles, 21 generated Codex/
-Claude/OpenCode registrations, data contracts, PowerShell installation/validation
-utilities and behavioral fixtures. The host schedules native subagents; there is
-no Python orchestrator in that package. DSPy/RLM/GEPA are procedural inspirations,
-not executed libraries. Generic native spawning can use the canonical prompts
-when custom-role registration is unavailable.
-
-The local smoke exercise used one reused thread for three logical roles, six
-dispatches and budgeted repairs. Reused context did not qualify independent
-specialists. Both PowerShell versions passed the package's tooling assertions;
-those checks establish structure and installation behavior, not evidence truth.
-
-A subsequent actual Mímir review used two specialists, a dependent critic and
-final reflection through the engine. It concluded supervised experimentation is
-reasonable, while equivalent enforcement remains unproved. Priority findings:
-
-- Final publication is not fully bound to meaningful admitted evidence, required
-  critique and material-issue dispositions. A structurally consistent ledger can
-  still describe vacuous research.
-- Claim references aggregate stored attempts; discarded evidence can resolve a
-  critic reference without identifying the currently admitted attempt.
-- Source records can be fabricated or stale without deterministic local capture,
-  identity and excerpt checks. Matching excerpts alone still do not prove entailment.
-- Reservation history, raw-return limits, identity recovery and analysis rounds
-  rely substantially on coordinator compliance rather than executable transitions.
-- Role prompts do not enforce tool/filesystem isolation. Fresh history is distinct
-  from grader-file protection, and sealed evaluation requires both.
-- Transfer identity and adapter equality do not qualify custom-role discovery or
-  another computer's native tools. The earlier smoke report also contained broken
-  corpus hyperlinks, and original raw transport preservation remained unproved.
-
-Recommended next work is a small host-called PowerShell admission/publication
-gate, explicit attempt-bound evidence/critique selection, local capture checks and
-identity-preserving transition utilities. The harness can continue scheduling
-agents. Those review recommendations have not been implemented in this update.
-
 ## Verification and limits
 
 Focused regression tests cover scheduling, failures, cancellation, locks,
@@ -153,8 +123,6 @@ Checks repeated for this Git delivery on 2026-10-22:
 | --- | --- |
 | Worker environment: full `pytest -q` suite | 240 passed, 9 skipped; 112 subtests passed |
 | Research environment: `test_research_program.py` and `test_research_policy.py` | 27 passed; 14 subtests passed |
-| Mycroft package structure and generated adapter consistency | Passed; all 21 adapters matched canonical roles |
-| Mycroft PowerShell 7 and Windows PowerShell 5.1 tooling regressions | 37 assertions passed in each |
 
 These checks use fixtures for native transport behavior and do not establish live
 authentication, provider availability, independent source verification or better
@@ -165,8 +133,5 @@ Before consequential use, inspect underlying evidence and test the target harnes
 permissions, recovery and representative questions. No general speed, cost or
 quality improvement is claimed.
 
-Machine-local configs, environments, raw source captures, checkpoints, run
-journals, generated archives/decks and learning logs are deliberately excluded
-from this Git delivery. Dated documentation may reference local qualification
-artifacts that are not included; the checked-in tests and fixture generators are
-the reproducible starting point.
+Machine-local configs, environments and new raw development packets stay local.
+The separate Mycroft/presentation cleanup is excluded from this delivery.

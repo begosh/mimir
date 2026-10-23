@@ -371,10 +371,12 @@ class ManagedRuns(unittest.IsolatedAsyncioTestCase):
             async def spawn(self, prompt, role="Micro-Worker", **kwargs):
                 if role == "Mimir-Decomposer":
                     data = {"tasks": [{"id": "a", "role": "Analyst", "title": "Inspect", "prompt": "Examine source", "dependencies": [], "jev_score": 1.0}]}
-                elif "GEPA" in role:
-                    data = {"hardened_solution": "Verified report with explicit gaps", "reflection": "Checked gaps"}
+                elif role == "Mimir-Final-Checker":
+                    data = {"verdict":"PASS","issues":[]}
+                elif role == "Mimir-Synthesizer":
+                    data = {"answer": "Report with explicit gaps", "limitations": []}
                 else:
-                    data = "Source result with limitations"
+                    data = {"answer": "Source result with limitations", "sources": [], "claims": [], "gaps": []}
                 return SwarmResult(role, "SUCCESS", data, json.dumps(data))
         def factory(**kwargs):
             return Worker()
@@ -392,6 +394,6 @@ class ManagedRuns(unittest.IsolatedAsyncioTestCase):
                 await self.settle(identity)
                 self.assertEqual(self.manager.status(identity)["status"], "completed", self.manager.status(identity))
         self.assertEqual(stream.getvalue(), "")
-        self.assertIn("Verified report", self.manager.result(identity)["content"])
+        self.assertIn("Report with explicit gaps", self.manager.result(identity)["content"])
         checkpoint = json.loads((self.root / identity / "checkpoint.json").read_text(encoding="utf-8"))
-        self.assertEqual(checkpoint["worker_transport"], "native")
+        self.assertEqual(checkpoint["worker_transport"], "hybrid")

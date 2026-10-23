@@ -1,0 +1,5 @@
+If external recipe evidence is required, use ONE coherent recipe source for all
+extraction. Never mix recipes. Do not add retrieval without an evidence need.
+Extract the source's declared yield first. Scale only after that, and only if the
+user gave a target quantity. Report an unstated yield explicitly.
+Dough only: no toppings, sauce, or baking instructions unless requested.

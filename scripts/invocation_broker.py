@@ -110,7 +110,7 @@ class InvocationBroker(BaseSwarmBackend):
             raise ConfigurationRequired("Native model and effort are fixed for this run")
         async with self._semaphore:
             if self.budget:
-                protected = role in {"Red-Team-Critic", "GEPA-Evolver"}
+                protected = role in {"Red-Team-Critic", "GEPA-Evolver", "Mimir-Synthesizer", "Mimir-Final-Checker"}
                 available = self.budget["max_attempts"] - (0 if protected else self.reserve_for_review)
                 if self.attempts >= available or time.time() >= self.deadline or depth > self.budget["max_depth"]:
                     raise BudgetExhausted("Research budget exhausted; completed evidence retained without successful publication.")
@@ -124,6 +124,13 @@ class InvocationBroker(BaseSwarmBackend):
             started = time.monotonic()
             entry = {"operation_id": op, "parent": parent, "depth": depth,
                      "role": role, "input_chars": input_chars,
+                     "model": options.get("model") or self.default_model,
+                     "effort": options.get("effort") or self.default_effort,
+                     "tool_policy": "text_only" if restricted else "native",
+                     "execution_transport": ("responses" if restricted and getattr(self.native, "transport", None) == "hybrid"
+                         else "native_tools" if getattr(self.native, "transport", None) == "hybrid"
+                         else getattr(self.native, "transport", None)),
+                     "worker_timeout_seconds": getattr(self.native, "timeout_seconds", None),
                      "input_hash": identity({"prompt": prompt, "options": options}),
                      "status": "inflight", "tokens_used": None}
             self.usage_calls.append(entry)
@@ -137,7 +144,11 @@ class InvocationBroker(BaseSwarmBackend):
                 else:
                     result = await dispatch(prompt=prompt, role=role, **options)
                 entry.update(status=result.status, tokens_used=result.tokens_used or None,
-                             output_hash=identity(result.raw_response))
+                             output_hash=identity(result.raw_response),
+                             output_chars=len(result.raw_response),
+                             usage_details=result.usage_details, timing=result.timing)
+                if result.rejected_output:
+                    entry["rejected_output"] = result.rejected_output
                 result.operation_id = op
                 if result.status != "SUCCESS":
                     self.required_failures.append(op)
@@ -154,6 +165,9 @@ class InvocationBroker(BaseSwarmBackend):
 
     async def spawn(self, prompt, role="Micro-Worker", **options):
         return await self.invoke(prompt, role=role, **options)
+
+    async def spawn_restricted(self, prompt, role="Micro-Worker", **options):
+        return await self.invoke(prompt, role=role, restricted=True, **options)
 
     async def aclose(self):
         await self.native.aclose()

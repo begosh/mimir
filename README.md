@@ -1,5 +1,8 @@
 # Mímir — evidence-led research and review
 
+[Measured performance investigation](docs/PERFORMANCE_2026-10-22.md) explains
+the recent 24.6-minute high-effort run, cumulative token usage and synthesis fixes.
+
 > **WORK IN PROGRESS — VERY BETA.** Mímir is experimental software under active
 > development. Use it for supervised, bounded investigations and inspect the
 > underlying evidence. APIs, checkpoints, instructions and dependencies may
@@ -10,6 +13,15 @@ Mímir helps your coding assistant investigate difficult questions, compare
 designs and challenge consequential assumptions. A shared Python engine runs
 bounded workers, retains source/claim/gap records and publishes recoverable
 reports. Model findings remain evidence for review, not independently verified facts.
+
+Text-only planning, extraction, checking and synthesis now use direct API calls
+by default. Codex, AGY, Claude and OpenCode serve as tool runtimes, initialized
+only when needed. Use `--backend responses` for direct-only work. Configure Azure
+OpenAI or OpenAI API credentials and an explicit API model/deployment ID; CLI
+login alone does not supply API access. The tested profile is gpt-6.1-sol at low
+effort. [Measured comparison](docs/TEXT_TRANSPORT_COMPARISON_2026-10-23.md).
+Read the [execution conclusions](docs/EXECUTION_CONCLUSIONS_2026-10-23.md) for
+the measured gains, default routing, OpenCode results and remaining work.
 
 Choose the smallest useful workflow:
 
@@ -57,6 +69,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-workers.txt
 .\.venv\Scripts\python.exe scripts/install.py --skip-pip
 .\.venv\Scripts\python.exe scripts/mimir.py --diagnostics --backend codex --model gpt-6.1-sol --effort low
+.\.venv\Scripts\python.exe scripts/mimir.py --doctor
 ```
 
 The installer preserves existing notes and backups and links harness skill

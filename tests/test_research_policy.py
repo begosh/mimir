@@ -36,7 +36,7 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
             graph = await RecursiveDecomposer(worker, mode=mode).decompose_goal("Investigate current code")
             self.assertFalse(worker.calls)
             self.assertEqual(len(graph.nodes), count)
-            self.assertTrue(all(n.json_schema == worker_result_schema() for n in graph.nodes.values()))
+            self.assertTrue(all(n.json_schema == worker_result_schema(n.max_answer_words) for n in graph.nodes.values()))
             self.assertEqual(TaskGraph.from_dict(graph.to_dict()).to_dict(), graph.to_dict())
             if mode == "review":
                 self.assertEqual(graph.nodes["critique"].dependencies, {"evidence", "alternatives"})
@@ -49,6 +49,56 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "budget"):
             await RecursiveDecomposer(worker, mode="swarm", max_tasks=4).decompose_goal("review")
         self.assertEqual(worker.calls[0]["json_schema"]["properties"]["tasks"]["maxItems"], 4)
+
+    async def test_swarm_interprets_before_task_decomposition_with_restricted_planning(self):
+        brief = {"outcome": "Recipe", "constraints": [], "components": ["Dough", "Baking"],
+                 "evidence_needs": ["Dough method"], "missing_information": ["Oven temperature"]}
+        class Planner(Worker):
+            async def spawn_restricted(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(status="SUCCESS", data={"task_brief": brief, "tasks": [
+                    {"id": "dough", "role": "Analyst", "title": "Dough", "objective": "Resolve dough method", "dependencies": []}]}, raw_response="")
+        worker = Planner()
+        graph = await RecursiveDecomposer(worker, mode="swarm").decompose_goal("Pizza recipe")
+        self.assertEqual(len(worker.calls), 1)
+        self.assertIn("Do not search", worker.calls[0]["prompt"])
+        self.assertIn("task_brief", worker.calls[0]["json_schema"]["required"])
+        self.assertIn("Oven temperature", graph.nodes["dough"].prompt)
+        self.assertIn("Before retrieving evidence", graph.nodes["dough"].prompt)
+
+    def test_invalid_task_brief_is_rejected_without_inventing_constraints(self):
+        from task_brief import validate_task_brief
+        with self.assertRaisesRegex(ValueError, "Task brief requires"):
+            validate_task_brief({"outcome": "Pizza", "invented": "Use home oven"})
+
+    async def test_swarm_missing_brief_never_executes_tasks(self):
+        worker = Worker([{"id": "dough", "role": "Analyst", "title": "Dough", "objective": "Resolve dough", "dependencies": []}])
+        with self.assertRaisesRegex(ValueError, "must return a task_brief"):
+            await RecursiveDecomposer(worker, mode="swarm").decompose_goal("Pizza")
+        self.assertEqual(len(worker.calls), 1)
+
+    async def test_role_assignments_are_isolated_without_losing_shared_constraints(self):
+        goal = ("Inspect only approved.py.\n\n"
+                "Evidence specialist: EVIDENCE ONLY. Alternatives specialist: ALTERNATIVES ONLY. "
+                "Critic: CRITIC ONLY. Final synthesis: SYNTHESIS ONLY.\n\n"
+                "Keep conflicts. Do not change files.")
+        graph = await RecursiveDecomposer(Worker(), mode="review").decompose_goal(goal)
+        assignments = {"evidence": "EVIDENCE ONLY", "alternatives": "ALTERNATIVES ONLY", "critique": "CRITIC ONLY"}
+        for key, node in graph.nodes.items():
+            self.assertIn(assignments[key], node.prompt)
+            self.assertIn("Inspect only approved.py", node.prompt)
+            self.assertIn("Keep conflicts. Do not change files.", node.prompt)
+            self.assertNotIn("SYNTHESIS ONLY", node.prompt)
+            for other, instruction in assignments.items():
+                if other != key:
+                    self.assertNotIn(instruction, node.prompt)
+        self.assertEqual(graph.goal, goal)
+        self.assertEqual(graph.nodes["critique"].max_answer_words, 180)
+
+    def test_unlabelled_role_mentions_are_preserved(self):
+        from task_graph import separate_review_assignments
+        goal = "The text says Critic: is a role.\n\nPreserve this shared constraint."
+        self.assertEqual(separate_review_assignments(goal), (goal, {}))
 
     async def test_swarm_cannot_add_redundant_executive(self):
         worker = Worker([{"id": "exec", "role": "Executive-Synthesizer", "title": "Combine", "objective": "Combine"}])

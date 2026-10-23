@@ -1,6 +1,7 @@
 """Local stdio tool adapter; stdout is exclusively the MCP protocol."""
 from __future__ import annotations
 import argparse
+import asyncio
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,6 +27,7 @@ def create_server(root: Path, manager: RunManager | None = None):
     server = MCPServer("mimir", version="1.0.0", lifespan=lifespan,
                        instructions="Run plan, execute and synthesize in order. Each start returns promptly. Keep host chat quiet: one opening sentence, then coalesce get_status narration and nearby milestones into one short Mimir well/forge/chronicle update about every 45-60 seconds during long work. Do not relay every worker event, replay old updates, narrate routine checks or announce completion before reading artifacts and giving one concise final answer. Tool-call cards are host-rendered. Status waits up to 20 seconds for meaningful changes by default. Advance its cursor and drain pages silently. Keep hashes, JSON, paths and routine usage in artifacts. Successful completion includes cleanup. Preserve material evidence gaps. Workers use their native credentials/tools, not the host's tools.")
     read_only = ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=False)
+    public_read = ToolAnnotations(read_only_hint=True, destructive_hint=False, open_world_hint=True)
     local_write = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=True)
 
     @server.tool(annotations=local_write)
@@ -33,7 +35,7 @@ def create_server(root: Path, manager: RunManager | None = None):
                         model: str | None = None, effort: str | None = None,
                         phase: Literal["plan", "execute", "synthesize"] = "plan",
                         run_id: str | None = None,
-                        worker_transport: Literal["native", "cli"] | None = None,
+                        worker_transport: Literal["native", "cli", "hybrid"] | None = None,
                         worker_timeout: float | None = None, max_concurrency: int | None = None,
                         skip_web: bool = False, search_query: str | None = None,
                         enable_jev: bool | None = None,
@@ -44,8 +46,10 @@ def create_server(root: Path, manager: RunManager | None = None):
                         max_context_chars: int | None = None,
                         research_program: Literal["native", "dspy", "rlm"] | None = None,
                         research_budget: dict | None = None, source_manifest: str | None = None,
-                        program_manifest: str | None = None) -> dict:
-        """Start planning, or resume the same run ID for execution/synthesis. No model fallback. Use skip_web for private objectives; public search queries are separate."""
+                        program_manifest: str | None = None, task_brief: dict | None = None,
+                        recursive_plan: bool | None = None, planning_budget: dict | None = None,
+                        max_depth: int = 2) -> dict:
+        """Interpret and plan before worker retrieval; no preliminary search. Supply a compact task_brief with outcome, constraints, components, evidence_needs and missing_information. Resume the same ID; no model fallback."""
         return await runs.start(goal=goal, backend=backend, model=model, effort=effort,
                                 phase=phase, run_id=run_id, worker_transport=worker_transport,
                                 worker_timeout=worker_timeout, max_concurrency=max_concurrency,
@@ -53,14 +57,17 @@ def create_server(root: Path, manager: RunManager | None = None):
                                 mode=mode, max_tasks=max_tasks, memory_mode=memory_mode,
                                 memory_path=memory_path, max_context_chars=max_context_chars,
                                 research_program=research_program, research_budget=research_budget,
-                                source_manifest=source_manifest, program_manifest=program_manifest)
+                                source_manifest=source_manifest, program_manifest=program_manifest,
+                                task_brief=task_brief, recursive_plan=recursive_plan,
+                                planning_budget=planning_budget, max_depth=max_depth)
 
-    @server.tool(annotations=read_only)
+    @server.tool(annotations=public_read)
     async def get_diagnostics(backend: str = "codex", model: str | None = None,
-                              effort: str | None = None) -> dict:
-        """Read execution identity, required credential presence and dependency readiness without inference or exposing secrets."""
+                              effort: str | None = None, check_search: bool = False) -> dict:
+        """Read setup without inference or secrets. Opt into bounded public search probes with check_search=true; report usability and suggest an MCP if the scout fails."""
         from diagnostics import collect_diagnostics
-        return collect_diagnostics(backend, model, effort, run_root=runs.root)
+        return await asyncio.to_thread(collect_diagnostics, backend, model, effort,
+                                       run_root=runs.root, check_search=check_search)
 
     @server.tool(annotations=read_only)
     async def get_status(run_id: str, after_sequence: int = 0, limit: int = 50,

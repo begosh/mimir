@@ -21,7 +21,25 @@ the shared skill while retaining learned notes and backups. The installer does
 not register MCP in host configuration. A copied skill still uses the configured
 absolute Python interpreter; no virtual environment is copied into the package.
 
-New runs default to `worker_transport="native"`:
+New runs selecting a tool runtime default to `worker_transport="hybrid"`: Python
+sends text-only operations directly to the Responses API and initializes the
+selected native runtime only for tool-using work. Azure uses the configured
+AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY; OpenAI uses OPENAI_BASE_URL and
+OPENAI_API_KEY. MIMIR_TEXT_API_PROVIDER can explicitly choose azure or openai.
+Credentials never enter prompts or checkpoints. Configured certificates remain
+enforced. `backend="responses"` uses direct requests with no tool runtime.
+
+The selected model must be an API model/deployment ID. Native model aliases are
+not translated. Codex/gpt-6.1-sol/low is tested live; other tool-runtime/model
+combinations require access on both routes. Missing API credentials stop the run
+instead of silently falling back to a more expensive runtime. Text-only work
+does not require an installed tool runtime; tool prerequisites are checked when
+tool work begins. Native implementations for tool work remain:
+
+OpenCode's tool identifier adds the configured provider namespace to the selected
+API model (for example azure/gpt-6.1-sol). MIMIR_TOOL_MODEL can supply an explicit
+namespace; its model component must match the selected API model. No different
+model or effort is substituted.
 
 | Worker | Native implementation | Authentication and tools |
 | --- | --- | --- |
@@ -31,6 +49,7 @@ New runs default to `worker_transport="native"`:
 | AGY | Existing headless CLI | Cached AGY login and disposable home; no assumed SDK login equivalence |
 | Direct HTTP | Existing explicitly selected adapter | Caller-selected endpoint/key; no worker MCP tools |
 
+`--worker-transport native` explicitly restores all-native calls.
 `--worker-transport cli` explicitly selects the legacy CLI implementation for
 Codex, Claude or OpenCode. There is no automatic fallback. SDK dependency errors
 are actionable failures. Model, effort and transport are independent from the
@@ -79,8 +98,8 @@ are recorded in [the research note](INTEGRATION_RESEARCH_2026-10-22.md).
 ## Run lifecycle
 
 1. `start_run(goal=..., backend=..., model=..., effort=..., phase="plan")`
-   returns a unique run ID and queued status promptly. Public scouting uses a
-   separate query; use `skip_web=true` for private/local objectives.
+   returns a unique run ID and queued status promptly. Supply `task_brief` for
+   the host's interpretation. Planning performs no preliminary public search.
 2. `get_status(run_id, after_sequence=..., limit=...)` returns durable status,
    concise `narration` and meaningful `updates`. The default `wait_seconds=20`
    waits for meaningful changes (0–25 seconds); heartbeat-only activity does not
@@ -145,6 +164,17 @@ verified facts. Missing source locators remain explicit and the full registry
 is preserved in Markdown. Entailment and source-read authenticity need independent
 review. Legacy unstructured worker output remains coverage-unknown.
 
+Task planning precedes retrieval. The old unconditional scout search was removed;
+the original raw objective stays in the checkpoint and is never submitted by the
+planning stage to a public search service. `task_brief` supplies a host
+interpretation (outcome, constraints, components, evidence needs, missing
+information), validated against bounded fields and frozen for resume. Without
+it, single/review templates instruct workers to interpret before tools and record
+`worker_pending`. Swarm's existing planner returns the brief and tasks; Codex
+uses text-only planning. Other adapters receive a no-retrieval instruction without
+the same runtime guarantee. Query/domain arguments are optional retrieval hints.
+The legacy scout remains available for diagnostics, outside the normal pipeline.
+
 `get_diagnostics` and CLI `--diagnostics` expose runtime/installed identity,
 interpreter/dependencies, workspace/run root, memory paths and configured native
 credential presence. No model request, remote login or credential value is
@@ -154,6 +184,16 @@ from the Process scope may be supplied from User then Machine scope privately
 through SDK child-environment overrides. An explicitly empty Process value
 suppresses inheritance. Global environment/configuration and login state stay
 untouched. Native preflight names missing prerequisites before planning.
+
+CLI `--doctor` adds bounded public search checks, also available through
+`get_diagnostics(check_search=true)`. Ordinary diagnostics remain offline.
+The doctor uses the native scout's HTTP client plus system curl against
+DuckDuckGo, Bing and Google, in parallel, with a fixed `Neapolitan pizza recipe`
+query. It distinguishes certificate errors, proxy blocks, other HTTP failures,
+and HTTP 200 pages without recognizable result links. Curl requests have an
+8-second deadline and 1 MiB response limit. Worker readiness is separate from
+search usability. If the default scout fails it recommends testing Firecrawl MCP;
+it does not configure a connection, change the search provider or call a model.
 
 Memory defaults to `read`, using project `.mimir/LEARNINGS.md` curated guidance.
 Default legacy fallback reads standing guidance only, omitting historical dated
@@ -181,6 +221,14 @@ Claude also escalates native shutdown, which can take additional seconds.
 Public scouting uses blocking source requests. Cancellation joins these bounded
 requests before releasing ownership. The old direct HTTP adapters retain their
 blocking-thread limitation. None of these waiting periods represent new findings.
+
+The Python scout honors configured CA files in this order: `REQUESTS_CA_BUNDLE`,
+`CURL_CA_BUNDLE`, `SSL_CERT_FILE`, then `NODE_EXTRA_CA_CERTS`. This supports the
+shared enterprise/Zscaler bundle without disabling HTTPS verification. urllib
+adds the selected certificates to its default trust; curl uses the selected CA
+file. Missing or invalid files fail retrieval. Certificate trust does not grant
+access through a proxy policy block. On 2026-10-22, the pizza search passed TLS
+with the configured SKF ZIA bundle but returned HTTP 403 from `Zscaler/6.2`.
 
 Codex filesystem read-only policy does not enforce a remote MCP query-only
 catalog. Claude applies a deny hook; OpenCode combines query permissions with

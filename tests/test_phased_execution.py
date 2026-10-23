@@ -29,8 +29,10 @@ class PhasedExecutionTests(unittest.IsolatedAsyncioTestCase):
             return graph
 
         async def fake_spawn(prompt, role="Micro-Worker", *args, **kwargs):
-            if "GEPA-Evolver" in role or "GEPA" in prompt:
-                return SwarmResult(role, "SUCCESS", {"hardened_solution": "Phased hardened solution", "reflection": "Reflected"}, "raw")
+            if role == "Mimir-Final-Checker":
+                return SwarmResult(role, "SUCCESS", {"verdict":"PASS","issues":[]}, "raw")
+            if role == "Mimir-Synthesizer":
+                return SwarmResult(role, "SUCCESS", {"answer": "Phased hardened solution", "limitations": []}, "raw")
             return SwarmResult(role, "SUCCESS", f"Result from {role}", f"Raw from {role}", duration_seconds=0.1)
 
         backend.check_cli = fake_check

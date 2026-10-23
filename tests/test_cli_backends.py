@@ -268,14 +268,14 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
                 # The host can see queued work before awaiting the CLI response.
                 events = [json.loads(line) for line in progress.getvalue().splitlines()]
                 self.assertIn("task_submitted", [event["event"] for event in events])
-                result = {"finding": "Fixture result"}
+                result = {"answer": "Fixture result", "sources": [], "claims": [], "gaps": []}
             return 0, json.dumps({"subtype": "success", "result": json.dumps(result)}), ""
         backend._run_cli = run
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "report.md"
             memory = JarvisMemory(str(Path(directory) / "LEARNINGS.md"))
             with patch.object(mimir, "create_swarm_backend", return_value=backend), patch.object(mimir, "JarvisMemory", return_value=memory), redirect_stdout(progress):
-                await mimir.run_mimir("Design with required constraint", str(report), backend="claude", skip_web=True, enable_jev=False, progress_format="jsonl")
+                await mimir.run_mimir("Design with required constraint", str(report), backend="claude", skip_web=True, enable_jev=False, progress_format="jsonl", state_file=str(Path(directory) / "state.json"))
             artifact = json.loads(report.with_suffix(".json").read_text(encoding="utf-8"))
             self.assertEqual(len(artifact["task_results"]), 3)
             self.assertEqual(artifact["hardened_solution"], "Completed fixture synthesis")
@@ -310,7 +310,7 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
             progress = io.StringIO()
             with patch.object(mimir, "create_swarm_backend", return_value=backend), patch.object(mimir, "JarvisMemory", return_value=memory), patch.object(mimir.RecursiveDecomposer, "decompose_goal", decompose), redirect_stdout(progress):
                 with self.assertRaisesRegex(RuntimeError, "authentication failed"):
-                    await mimir.run_mimir("objective", str(report), backend="claude", skip_web=True, enable_jev=False, progress_format="jsonl")
+                    await mimir.run_mimir("objective", str(report), backend="claude", skip_web=True, enable_jev=False, progress_format="jsonl", state_file=str(Path(directory) / "state.json"))
             self.assertFalse(report.exists())
             self.assertEqual(memory.get_summary_stats()["entries"], 0)
             events = [json.loads(line) for line in progress.getvalue().splitlines()]

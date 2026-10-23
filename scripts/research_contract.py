@@ -15,9 +15,9 @@ SUPPORT_STATUSES = ("supported", "inference", "contradicted", "unsupported")
 DISCOVERY_TYPES = {"search_snippet", "abstract", "worker_report"}
 
 
-def worker_result_schema() -> Dict[str, Any]:
+def worker_result_schema(answer_words: int | None = None) -> Dict[str, Any]:
     """Return a fresh schema accepted by native structured-output adapters."""
-    return {
+    schema = {
         "type": "object", "additionalProperties": False,
         "required": ["answer", "sources", "claims", "gaps"],
         "properties": {
@@ -44,6 +44,17 @@ def worker_result_schema() -> Dict[str, Any]:
             "gaps": {"type": "array", "items": {"type": "string"}},
         },
     }
+    if answer_words is not None:
+        props = schema["properties"]
+        props["answer"].update(maxLength=answer_words * 12,
+                               description=f"Only your assigned findings, at most {answer_words} whitespace-separated words.")
+        for field in ("sources", "claims", "gaps"):
+            props[field]["maxItems"] = 8
+        props["sources"]["items"]["properties"]["support_excerpt"]["maxLength"] = 600
+        for field in ("text", "rationale"):
+            props["claims"]["items"]["properties"][field]["maxLength"] = 400
+        props["gaps"]["items"]["maxLength"] = 400
+    return schema
 
 
 EVIDENCE_INSTRUCTIONS = """Return the required structured research result. Put the readable answer in
