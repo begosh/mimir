@@ -6,7 +6,20 @@ failure before choosing this route; do not run both frontends against one run.
 The interpreter needs requirements-workers.txt for native SDK/MCP workers.
 Write a self-contained UTF-8 objective to a unique file. Use unique checkpoint
 and report paths. Add --skip-web for local/private objectives or a separate
-public --search-query; never publish the complete private objective as a query.
+public --search-query hint; never publish the complete private objective as a query.
+Planning never performs preliminary web search. Optional --task-brief accepts a
+compact JSON interpretation containing outcome, constraints, components,
+evidence_needs and missing_information. The latter four fields are string arrays.
+Without a host brief, focused workers interpret before tools; swarm's existing
+planning call produces the brief and tasks. No extra planning call for single.
+
+For the explicit recursive planner, add `--mode swarm --recursive-plan --depth 3
+--max-tasks 12`. Planning first interprets, then recursively splits non-atomic
+components. `--planning-budget` accepts a JSON object with `max_calls`,
+`max_seconds`, `max_nodes`. Use `--phase plan` to inspect the interpretation and
+leaf contracts before execution. The sidecar `checkpoint.planning.json` retains
+partial work and call accounting on failure. Missing user choices stop execution;
+clarify and create a new plan. Simple focused requests retain the cheaper path.
 
 ```powershell
 python -u <skill-dir>/scripts/mimir.py --goal-file artifacts/review-goal.txt --backend codex --model <agreed-model> --effort low --mode review --max-tasks 4 --skip-web --progress jsonl --phase plan --state-file artifacts/review-state.json --output artifacts/review-report.md

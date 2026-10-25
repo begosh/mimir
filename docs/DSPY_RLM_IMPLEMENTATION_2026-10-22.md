@@ -1,5 +1,8 @@
 # DSPy/RLM implementation qualification — 2026-10-22
 
+> Historical development snapshot. Local run/capture artifacts were cleared
+> during workspace cleanup; use current setup docs and tests to reproduce behavior.
+
 The approved design is implemented as optional investigator programs at Mimir's
 scheduler seam. Standard research remains the default. The Python engine retains
 planning, dependency scheduling, critic/synthesis, durable source/claim/gap records,

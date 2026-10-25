@@ -583,6 +583,12 @@ one final synthesis after this graph. Respond directly in English with the schem
                 from atomic_worker import atomic_prompt
                 node.prompt = atomic_prompt(t["contract"], original_request=goal)
                 node.input_artifacts["worker_wrapper"] = "atomic_v1"
+            else:
+                from post_worker import material_finding_contract
+                node.input_artifacts["task_contract"] = material_finding_contract(node.prompt)
+            from post_worker import result_gate_policy, result_repair_policy
+            node.input_artifacts["result_gate"] = result_gate_policy()
+            node.input_artifacts["result_repair"] = result_repair_policy()
             graph.add_node(node)
         graph._require_valid()
         if self.mode == "swarm" and self.task_brief is None:

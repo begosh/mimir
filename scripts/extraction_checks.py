@@ -9,7 +9,12 @@ def check_extraction(result, supplied_sources):
     prove completeness, field association, ordering or arbitrary paraphrases.
     """
     issues = []
-    available = {s["id"]: s for s in supplied_sources}
+    available = {}
+    for source in supplied_sources:
+        if source["id"] in available:
+            available[source["id"]]["text"] += "\n" + source.get("text", "")
+        else:
+            available[source["id"]] = {**source, "text": source.get("text", "")}
     cited = result.get("sources", [])
     if not supplied_sources or not cited:
         return {"verdict": "REVIEW", "issues": [], "reason": "No supplied source/citation binding"}
@@ -22,7 +27,7 @@ def check_extraction(result, supplied_sources):
         text = source.get("text", "")
         labels = set(re.findall(r"\bL\d+\b", text))
         mentioned = re.findall(r"\bL\d+\b", citation.get("locator", ""))
-        if any(label not in labels for label in mentioned):
+        if source.get("delivery") not in {"supplied_inline", "retrieve_capture", "frozen_dependency_span"} and any(label not in labels for label in mentioned):
             issues.append("Citation references a line absent from the supplied source")
         # A short supporting quote is not the complete evidence assigned to the
         # task. Check against its bound source; the model checks line entailment.

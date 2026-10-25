@@ -36,11 +36,22 @@ class FixtureBackend(BaseSwarmBackend):
         self.cleanup_failure = cleanup_failure
         self.closed = False
 
+    async def spawn_restricted(self, prompt, role="Micro-Worker", **kwargs):
+        return await self.spawn(prompt, role=role, **kwargs)
+
     async def spawn(self, prompt, role="Micro-Worker", **kwargs):
         self.calls.append({"role": role, "prompt": prompt, **kwargs})
         if role in self.failures:
             await asyncio.sleep(.02)  # allow an independent result to checkpoint
             return SwarmResult(role, "ERROR", None, "HTTP 429 provider rate limit", tokens_used=7)
+        if role == "Mimir-Result-Checker":
+            context = json.loads(prompt.split("INPUTS:\n")[1])
+            value = {"checks": [{"id": c["id"], "verdict": "PASS", "issues": []}
+                                for c in context["candidates"]]}
+            return SwarmResult(role, "SUCCESS", value, json.dumps(value), tokens_used=11)
+        if role == "Mimir-Assembly-Repairer":
+            value = {"answer": f"Review supported by {SOURCE}.", "limitations": [], "quarantined_tasks": []}
+            return SwarmResult(role, "SUCCESS", value, json.dumps(value), tokens_used=11)
         value = {"reflection": "No unsupported promotion; source and gaps retained.",
                  "hardened_solution": f"Review supported by {SOURCE}."} if role == "GEPA-Evolver" else ({"answer": f"Review supported by {SOURCE}.", "limitations": []} if role == "Mimir-Synthesizer" else ({"verdict":"PASS","issues":[]} if role == "Mimir-Final-Checker" else finding()))
         return SwarmResult(role, "SUCCESS", value, json.dumps(value), duration_seconds=.001, tokens_used=11)
@@ -78,10 +89,10 @@ class EnginePolicyTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {}, clear=True):
             return await engine.run_mimir(**options)
 
-    async def test_single_is_one_call_and_default_read_does_not_write_memory(self):
+    async def test_single_is_one_worker_and_one_check_and_read_does_not_write_memory(self):
         state = await self.run_engine(goal="Resolve the focused question", mode="single")
         self.assertEqual(state["phase"], "synthesized")
-        self.assertEqual([c["role"] for c in self.instances[0].calls], ["Domain-Analyst"])
+        self.assertEqual([c["role"] for c in self.instances[0].calls], ["Domain-Analyst", "Mimir-Result-Checker"])
         self.assertFalse(self.memory.exists())
         self.assertFalse(self.memory.parent.exists())
         self.assertTrue(self.instances[0].closed)
@@ -90,9 +101,43 @@ class EnginePolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["research"]["coverage"], "reported")
         self.assertFalse(payload["research"]["independently_verified"])
         self.assertEqual(payload["research"]["claims"][0]["source_ids"], ["research:primary"])
-        self.assertEqual(payload["usage"]["model_calls"], 1)
-        self.assertEqual(payload["usage"]["known_tokens"], 11)
+        self.assertEqual(payload["usage"]["model_calls"], 2)
+        self.assertEqual(payload["usage"]["known_tokens"], 22)
+        self.assertEqual(payload["budget_status"]["limits"]["max_attempts"], 64)
+        self.assertEqual(payload["budget_status"]["attempts_used"], 2)
+        self.assertEqual(payload["budget_status"]["publication_calls_remaining"], 0)
+        self.assertTrue(self.checkpoint.with_suffix(".operations.jsonl").is_file())
         self.assertEqual(self.events[-1]["event"], "run_completed")
+
+    async def test_phased_review_keeps_one_budget_and_publication_reserve(self):
+        budget = {"max_attempts": 7, "max_seconds": 60}
+        await self.run_engine(goal="Review bounded evidence", mode="review", phase="plan",
+                              research_budget=budget)
+        journal = self.checkpoint.with_suffix(".operations.jsonl")
+        header = json.loads(journal.read_text(encoding="utf-8").splitlines()[0])
+        state = await self.run_engine(phase="execute")
+        self.assertEqual(len(state["usage_calls"]), 5)
+        with self.assertRaisesRegex(ConfigurationRequired, "fixed by the plan"):
+            await self.run_engine(phase="synthesize", research_budget={**budget, "max_attempts": 8})
+        state = await self.run_engine(phase="synthesize")
+        self.assertEqual(len(state["usage_calls"]), 7)
+        payload = json.loads(self.report.with_suffix(".json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["budget_status"]["deadline"], header["time"] + 60)
+        self.assertEqual(payload["budget_status"]["publication_calls_remaining"], 0)
+        self.assertEqual([c["role"] for c in state["usage_calls"] if c["publication_reserved"]],
+                         ["Mimir-Synthesizer", "Mimir-Final-Checker"])
+
+    async def test_exhausted_ordinary_run_retains_calls_and_cannot_retry_paid_work(self):
+        await self.run_engine(goal="Resolve focused question", mode="single", phase="plan",
+                              research_budget={"max_attempts": 1})
+        with self.assertRaises((WorkerFailure, ConfigurationRequired)):
+            await self.run_engine(phase="execute")
+        state = json.loads(self.checkpoint.read_text(encoding="utf-8"))
+        self.assertEqual(len(state["usage_calls"]), 1)
+        self.assertFalse(self.report.exists())
+        with self.assertRaises((WorkerFailure, ConfigurationRequired)):
+            await self.run_engine(phase="execute")
+        self.assertEqual(self.instances[-1].calls, [])
 
     async def test_default_planning_preserves_long_goal_and_brief_without_search(self):
         goal = "Give me the best napoli pizza recipe. " + "A long constraint remains part of the question. " * 100
@@ -201,7 +246,7 @@ class EnginePolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(rejected["result"]["answer"].split()), 251)
         self.assertEqual(rejected["tokens_used"], 11)
         self.assertNotIn("evidence", state["completed_data"])
-        self.assertEqual([c["role"] for c in self.instances[0].calls], ["Domain-Analyst", "Code-Architect"])
+        self.assertEqual([c["role"] for c in self.instances[0].calls], ["Domain-Analyst", "Code-Architect", "Mimir-Result-Checker"])
         self.assertFalse(self.report.exists())
 
     async def test_oversized_synthesis_is_retained_without_publishing(self):
@@ -222,7 +267,7 @@ class EnginePolicyTests(unittest.IsolatedAsyncioTestCase):
         call = state["usage_calls"][-1]
         self.assertEqual(call["status"], "ERROR")
         self.assertEqual(len(call["rejected_output"]["result"]["answer"].split()), 301)
-        self.assertEqual(len(self.instances[0].calls), 4)
+        self.assertEqual(len(self.instances[0].calls), 6)
         self.assertFalse(self.report.exists())
 
     async def test_partial_execution_reuses_completed_tasks_without_repeat_calls(self):
@@ -239,7 +284,8 @@ class EnginePolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(state["completed_data"]), {"evidence"})
         retained = state["completed_data"]["evidence"]
         await self.run_engine(phase="execute")
-        self.assertEqual([c["role"] for c in self.instances[-1].calls], ["Code-Architect", "Red-Team-Critic"])
+        self.assertEqual([c["role"] for c in self.instances[-1].calls],
+                         ["Code-Architect", "Mimir-Result-Checker", "Red-Team-Critic", "Mimir-Result-Checker"])
         state = json.loads(self.checkpoint.read_text(encoding="utf-8"))
         self.assertEqual(state["completed_data"]["evidence"], retained)
         self.assertEqual(state["phase"], "executed")

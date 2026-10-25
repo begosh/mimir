@@ -1,6 +1,0 @@
-{
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "mycroft",
-  "version": "0.1.0",
-  "description": "Evidence-led research through native subagents, bounded corpus analysis and explicit instruction optimization."
-}

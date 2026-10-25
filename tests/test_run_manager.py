@@ -39,8 +39,8 @@ class ManagedRuns(unittest.IsolatedAsyncioTestCase):
         await self.manager.aclose()
         self.temp.cleanup()
 
-    async def settle(self, run_id):
-        for _ in range(30):
+    async def settle(self, run_id, timeout=0.3):
+        for _ in range(int(timeout / 0.01)):
             if self.manager.status(run_id)["status"] not in {"queued", "running", "cancelling"}:
                 return
             await asyncio.sleep(0.01)
@@ -368,8 +368,14 @@ class ManagedRuns(unittest.IsolatedAsyncioTestCase):
         class Worker(BaseSwarmBackend):
             def __init__(self):
                 super().__init__("agreed")
+            async def spawn_restricted(self, prompt, role="Worker", **kwargs):
+                return await self.spawn(prompt, role=role, **kwargs)
             async def spawn(self, prompt, role="Micro-Worker", **kwargs):
-                if role == "Mimir-Decomposer":
+                if role == "Mimir-Result-Checker":
+                    context = json.loads(prompt.split("INPUTS:\n")[1])
+                    data = {"checks": [{"id": c["id"], "verdict": "PASS", "issues": []}
+                                       for c in context["candidates"]]}
+                elif role == "Mimir-Decomposer":
                     data = {"tasks": [{"id": "a", "role": "Analyst", "title": "Inspect", "prompt": "Examine source", "dependencies": [], "jev_score": 1.0}]}
                 elif role == "Mimir-Final-Checker":
                     data = {"verdict":"PASS","issues":[]}
@@ -391,7 +397,7 @@ class ManagedRuns(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.manager.status(identity)["status"], "completed", self.manager.status(identity))
             for phase in ("execute", "synthesize"):
                 await self.manager.start(run_id=identity, phase=phase)
-                await self.settle(identity)
+                await self.settle(identity, timeout=10)
                 self.assertEqual(self.manager.status(identity)["status"], "completed", self.manager.status(identity))
         self.assertEqual(stream.getvalue(), "")
         self.assertIn("Report with explicit gaps", self.manager.result(identity)["content"])

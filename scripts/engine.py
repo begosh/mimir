@@ -501,10 +501,15 @@ async def _run_execute_stage(state: Dict[str, Any], state_file: Optional[str], b
         raise ConfigurationRequired("Recursive plan has unresolved required inputs; review the interpretation and blocked_by fields before creating a new plan: " + ", ".join(blocked))
     from post_worker import result_gate_policy, result_repair_policy
     swarm.batch_result_checks = True
+    swarm.capture_allowed_domains = state.get("research_config", {}).get("allowed_domains", [])
     for node in task_graph.nodes.values():
+        if state.get("mode") and not node.input_artifacts.get("task_contract"):
+            from post_worker import material_finding_contract
+            node.input_artifacts["task_contract"] = material_finding_contract(node.prompt)
         if node.input_artifacts.get("worker_wrapper") == "atomic_v1":
             from source_binding import bind_captured_sources
             bind_captured_sources(node, state.get("research_config", {}))
+        if state.get("mode") or node.input_artifacts.get("worker_wrapper") == "atomic_v1":
             node.input_artifacts["result_gate"] = result_gate_policy()
             node.input_artifacts["result_repair"] = result_repair_policy()
     blackboard = Blackboard(session_id=str(int(time.time())))
@@ -640,6 +645,14 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
 
     if not completed_data:
         raise ValueError("No completed worker tasks found in state file. Run --phase execute first.")
+    if state.get("mode"):
+        from post_worker import result_gate_policy
+        policy = result_gate_policy()
+        nodes = TaskGraph.from_dict(state["graph"]).nodes
+        if any(nodes[nid].input_artifacts.get("result_gate") != policy or
+               data.get("result_check", {}).get("policy") != policy
+               for nid, data in completed_data.items()):
+            raise ConfigurationRequired("Publication requires current material-finding checks for every task; replan explicitly.")
     if state.get("mode") and swarm is not None:
         from scheduler import validate_retained
         validate_retained(TaskGraph.from_dict(state["graph"]), swarm, completed_data)
@@ -673,42 +686,57 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
 
     if state.get("mode") == "single":
         from research_contract import normalize_worker_result
-        hardened_solution = normalize_worker_result(next(iter(completed_data.values()))["result"])["answer"]
+        envelope = next(iter(completed_data.values()))
+        check = envelope.get("result_check", {})
+        from post_worker import result_gate_policy
+        if check.get("verdict") != "PASS" or check.get("policy") != result_gate_policy():
+            raise ConfigurationRequired("Single publication requires a current accepted material-finding check; replan explicitly.")
+        normalized = normalize_worker_result(envelope["result"])
+        hardened_solution = normalized["answer"]
+        state["synthesis_result"] = {"answer": hardened_solution, "limitations": normalized["gaps"]}
+        state["final_answer_check"] = {**check, "check_scope": "Existing single answer plus gaps; no synthesis transformation"}
         reflection = "Single-worker report; no separate critique or reflective model call was performed."
+        if normalized["gaps"]:
+            reflection += "\n" + "\n".join(normalized["gaps"])
+        from publication_view import build_publication_view
+        from post_worker import synthesis_context
+        state["publication_view"] = build_publication_view(synthesis_context(state))
     else:
-        from post_worker import synthesize, synthesis_context, check_final_answer
-        try:
-            synthesis_result, context = await synthesize(
-                swarm, synthesis_context(state), model=active_model,
-                max_answer_words=300 if state.get("mode") == "review" else None,
-            )
-            hardened_solution = synthesis_result["answer"]
-            reflection = "Answer assembled from supplied findings; no separate reflective model call."
-            if synthesis_result["limitations"]:
-                reflection += "\n" + "\n".join(synthesis_result["limitations"])
-            state["synthesis_result"] = synthesis_result
-            state["synthesis_context"] = context
-            state.pop("final_answer_check", None)
-            ui.emit("final_check_started")
-            try:
-                final_check = await check_final_answer(swarm, context, synthesis_result, model=active_model)
-            except (Exception, asyncio.CancelledError) as exc:
-                state["rejected_synthesis"] = {"result": synthesis_result, "checker_error": str(exc),
-                                               "reason": "Final checker failed to return a valid verdict"}
-                raise
-            state["final_answer_check"] = final_check
-            ui.emit("final_check_completed", verdict=final_check["verdict"], issues=final_check["issues"])
-            if final_check["verdict"] != "PASS":
-                state["rejected_synthesis"] = {"result": synthesis_result, "result_check": final_check,
-                                               "reason": "Final answer acceptance check failed"}
-                from backend import WorkerFailure
-                raise WorkerFailure("Final answer", "Acceptance check failed: " + "; ".join(final_check["issues"]))
-            state.pop("rejected_synthesis", None)
-        finally:
+        from post_worker import synthesis_context
+        from assembly_gate import assemble_checked
+        context = synthesis_context(state)
+        state["synthesis_context"] = context
+        def persist_assembly():
             state["usage_calls"] = list(getattr(swarm, "usage_calls", []))
             if state_file:
                 _save_state(state, state_file)
+        try:
+            synthesis_result, final_check = await assemble_checked(
+                swarm, context, state, persist_assembly, ui.emit, model=active_model,
+                max_answer_words=300 if state.get("mode") == "review" else None)
+            state["synthesis_result"] = synthesis_result
+            state["final_answer_check"] = final_check
+            hardened_solution = synthesis_result["answer"]
+            reflection = "Answer assembled from supplied findings; no separate reflective model call."
+            if state["assembly_history"]["corrections_reserved"]:
+                reflection += " One targeted assembly correction passed rechecking; rejected assembly retained in the checkpoint."
+            if synthesis_result["limitations"]:
+                reflection += "\n" + "\n".join(synthesis_result["limitations"])
+        finally:
+            persist_assembly()
     ui.emit("reflection_skipped" if is_single else "reflection_completed", output_excerpt=str(reflection)[:600])
+    publication_view = state.get("publication_view", {})
+    published_data = {}
+    for node_id, data in completed_data.items():
+        entry = publication_view.get(node_id, {})
+        if entry.get("status") == "quarantined":
+            published_data[node_id] = {**data, "result": {
+                "answer": "Quarantined task assertions; see publication status and original diagnostic record.",
+                "sources": entry["sources"], "claims": [], "gaps": entry["gaps"] + [entry["reason"]]}}
+        else:
+            published_data[node_id] = data
+    combined_critique = "\n\n".join(str(d["result"]) for nid, d in published_data.items()
+        if "critic" in d.get("role", "").lower() or "red-team" in d.get("role", "").lower())
 
     if ui.progress_format == "terminal":
         msg = "The single-worker findings are ready for publication." if is_single else "Mímir's assembled answer is ready for publication."
@@ -751,6 +779,18 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
         h = data.get("evidence_hash", "")
         h_str = f" [sha256:{h}]" if h else ""
         report_lines.append(f"### Node [{node_id}] - {data.get('role', 'Agent')}: {data.get('title', 'Task' if is_en else 'Uppgift')}{h_str}")
+        entry = publication_view.get(node_id, {})
+        if entry.get("status") == "quarantined":
+            report_lines.append("Publication: **quarantined**. " + entry["reason"] +
+                                " Original assertions retained as diagnostic records in the sidecar/checkpoint.\n")
+            report_lines.append("Sources and remaining gaps:\n```json\n" + json.dumps(
+                {"sources": entry["sources"], "gaps": entry["gaps"]}, indent=2, ensure_ascii=False) + "\n```\n")
+            continue
+        if data.get("result_check"):
+            rejected_count = sum(a.get("status") != "PASS" for a in data.get("result_attempts", []))
+            report_lines.append("Admission: model PASS; independent factual verification not performed. "
+                                "This is the accepted task version; final publication checks also cover the appendix. "
+                                f"Rejected attempts quarantined in the checkpoint: {rejected_count}.\n")
         node_res = data.get('result', '')
         node_res_str = json.dumps(node_res, indent=2, ensure_ascii=False) if isinstance(node_res, (dict, list)) else str(node_res)
         report_lines.append(f"```text\n{node_res_str}\n```\n")
@@ -763,7 +803,7 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
     bb_artifacts = blackboard.artifacts if blackboard else state.get("blackboard_artifacts", {})
     bb_hashes = list(blackboard.verified_evidence_store.keys()) if blackboard else state.get("verified_evidence_hashes", [])
     from research_contract import aggregate_research_results, audit_final_references
-    research = aggregate_research_results(completed_data)
+    research = aggregate_research_results(published_data)
     research["final_reference_audit"] = audit_final_references(hardened_str, research)
     if research["final_reference_audit"]["missing_supporting_locators"]:
         research["coverage"] = "partial"
@@ -807,10 +847,13 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
         "task_brief_origin": state.get("task_brief_origin", "legacy"),
         "retrieval_policy": state.get("retrieval_policy", "legacy"),
         "task_results": completed_data,
+        "publication_view": publication_view,
+        "task_results_scope": "Original immutable diagnostic records; publication_view governs released task assertions.",
         "reflection": reflection,
         "hardened_solution": hardened_solution,
         "synthesis_result": state.get("synthesis_result"),
         "synthesis_context": state.get("synthesis_context"),
+        "assembly_history": state.get("assembly_history"),
         "final_answer_check": state.get("final_answer_check"),
         "blackboard_artifacts": bb_artifacts,
         "verified_evidence_hashes": bb_hashes,
@@ -823,6 +866,7 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
                              "research_program": state.get("research_program", "native"),
                              "research_budget": (state.get("research_config") or {}).get("budget")},
         "research": research, "usage": usage,
+        "budget_status": swarm.budget_status,
         "research_identity": state.get("research_identity"),
         "captured_sources": [{k: v for k, v in r.items() if k != "text"}
                              for r in (state.get("research_config") or {}).get("sources", [])],
@@ -1015,17 +1059,14 @@ async def run_mimir(
                                  budget=research_config["budget"],
                                  journal=Path(state_file).with_suffix(".operations.jsonl") if research_config["budget"] else None,
                                  policy=research_identity if research_config["program"] != "native" or captured_sources.records else None,
-                                 recover=bool(state))
+                                 recover=bool(state),
+                                 publication_reserve=2 if mode != "single" and research_config["budget"] else 0)
         from prompt_data import model_view
         swarm.available_sources = model_view([{**({k: v for k, v in record.items() if k != "text"} if len(record["text"]) > 16000 else record),
             "text_delivery": "inline" if len(record["text"]) <= 16000 else "requires_bounded_excerpt",
             "status": research_config.get("source_statuses", {}).get(
             record["id"], "user_supplied" if record["retrieval_type"] == "local_file" else "retrieved")}
             for record in captured_sources.to_list()], captured_sources.to_list())
-        if mode == "review" and research_config["budget"]:
-            swarm.reserve_for_review = 3
-        elif mode == "swarm" and research_config["budget"]:
-            swarm.reserve_for_review = 2
         if hasattr(swarm, "help_command") or getattr(swarm, "transport", None) in ("sdk", "server", "hybrid"):
             await swarm.check_cli()
 

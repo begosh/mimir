@@ -32,6 +32,45 @@ class SourceStore:
             self.records[item["id"]] = item
 
     @classmethod
+    def capture_reference(cls, locator, *, workspace, allowed_domains=()):
+        """Read a worker-selected reference under engine-owned capture policy."""
+        import re
+        locator = re.sub(r":L\d+(?:-L?\d+)?$", "", locator)
+        parsed = urllib.parse.urlsplit(locator)
+        if parsed.scheme == "https":
+            if not isinstance(allowed_domains, (list, tuple)) or any(not isinstance(d, str) or not d for d in allowed_domains):
+                raise ValueError("HTTPS sources require an explicit domain list")
+            locator = urllib.parse.urlunsplit(parsed._replace(fragment=""))
+            if (parsed.hostname not in allowed_domains or parsed.username or parsed.password
+                    or parsed.port not in (None, 443)):
+                raise ValueError("Source URL is outside the explicit HTTPS domain allowlist")
+            class NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, *args, **kwargs):
+                    return None
+            opener = urllib.request.build_opener(NoRedirect)
+            with opener.open(urllib.request.Request(locator, headers={"User-Agent": "Mimir-source-capture/1"}), timeout=15) as response:
+                raw = response.read(20_000_001)
+                if len(raw) > 20_000_000:
+                    raise ValueError("Source exceeds 20 MB capture limit")
+                text = raw.decode(response.headers.get_content_charset() or "utf-8")
+            retrieval_type = "web_page"
+        else:
+            if "://" in locator:
+                raise ValueError("Dynamic capture requires a workspace file or approved HTTPS URL")
+            root = Path(workspace).resolve(strict=True)
+            target = (root / locator).resolve(strict=True)
+            if not target.is_relative_to(root):
+                raise ValueError("Dynamic local source is outside the workspace")
+            if target.stat().st_size > 20_000_000:
+                raise ValueError("Source exceeds 20 MB capture limit")
+            text = target.read_text(encoding="utf-8-sig")
+            locator, retrieval_type = str(target), "local_file"
+        digest = hashlib.sha256(text.encode()).hexdigest()
+        return {"id": "capture_" + identity({"locator": locator, "sha256": digest}),
+                "locator": locator, "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                "retrieval_type": retrieval_type, "text": text, "sha256": digest}
+
+    @classmethod
     def capture(cls, manifest):
         """Capture explicit local files or HTTPS URLs on an explicit domain allowlist."""
         path = Path(manifest).resolve(strict=True)

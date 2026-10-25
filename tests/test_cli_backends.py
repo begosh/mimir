@@ -271,6 +271,18 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
                 result = {"answer": "Fixture result", "sources": [], "claims": [], "gaps": []}
             return 0, json.dumps({"subtype": "success", "result": json.dumps(result)}), ""
         backend._run_cli = run
+        async def checked_text(prompt, role="Worker", **options):
+            calls.append(prompt)
+            if role == "Mimir-Result-Checker":
+                context = json.loads(prompt.split("INPUTS:\n")[1])
+                value = {"checks": [{"id": c["id"], "verdict": "PASS", "issues": []}
+                                    for c in context["candidates"]]}
+            elif role == "Mimir-Synthesizer":
+                value = {"answer": "Completed fixture synthesis", "limitations": []}
+            else:
+                value = {"verdict": "PASS", "issues": []}
+            return SwarmResult(role, "SUCCESS", value, json.dumps(value))
+        backend.spawn_restricted = checked_text  # Explicit hybrid text fixture.
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "report.md"
             memory = JarvisMemory(str(Path(directory) / "LEARNINGS.md"))
@@ -282,7 +294,7 @@ class BackendContracts(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(artifact["worker_effort"], "low")
             # The patched legacy memory object still writes; production uses explicit read mode.
             self.assertEqual(memory.get_summary_stats()["entries"], 1)
-        self.assertEqual(len(calls), 4)  # deterministic review: three nodes and synthesis
+        self.assertEqual(len(calls), 7)  # three workers, two batched checks, synthesis and final check
         events = [json.loads(line) for line in progress.getvalue().splitlines()]
         self.assertEqual([event["phase"] for event in events if event["event"] == "phase_started"], [1, 2, 3, 4, 5])
         self.assertEqual([event["sequence"] for event in events], list(range(1, len(events) + 1)))

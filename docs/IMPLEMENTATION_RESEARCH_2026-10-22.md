@@ -1,5 +1,8 @@
 # Mímir reliability, evidence and operating-policy implementation research
 
+> Historical development snapshot. Local run/capture artifacts were cleared
+> during workspace cleanup; use current setup docs and tests to reproduce behavior.
+
 Date: 2026-10-22. This note records primary-source research for the improvements following the skill setup assessment. It uses the pinned installed releases where available, distinguishes static preflight from authenticated readiness, and makes no live model requests. Credential values were neither printed nor written into files.
 
 ## Native provider preflight and Windows environment inheritance

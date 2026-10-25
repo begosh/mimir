@@ -29,7 +29,7 @@ def main():
     parser.add_argument("--research-program", choices=["native", "dspy", "rlm"], default=None)
     parser.add_argument("--source-manifest", help="Explicit JSON manifest of local UTF-8 files or allowlisted HTTPS sources")
     parser.add_argument("--program-manifest", help="Reviewed data-only optimized instruction manifest")
-    parser.add_argument("--research-budget", type=json.loads, help="JSON object with global attempt/time/depth limits")
+    parser.add_argument("--research-budget", type=json.loads, help="Fixed whole-run limits (default: 64 attempts, 1800 elapsed seconds); reported-token threshold may overshoot in-flight work")
     setup = parser.add_mutually_exclusive_group()
     setup.add_argument("--config-status", action="store_true", help="Show saved project profile and available CLIs without a model call")
     setup.add_argument("--configure", action="store_true", help="Save an explicitly agreed backend/model/effort in .mimir/config.json")

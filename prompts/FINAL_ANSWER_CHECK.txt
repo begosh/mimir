@@ -14,9 +14,21 @@ PASS requires:
 - The response addresses the request within supplied coverage. Honest explicit
   incomplete coverage can pass; unsupported claims of completion cannot.
 - Neither worker PASS nor critic agreement is presented as independent proof.
+- The task findings and critic findings will also be published in the task-results
+  appendix. Check their material assertions too. A statement corrected in the
+  assembled answer must not remain as an unqualified assertion in that appendix.
+  Reject publication when an appendix assertion conflicts with the supplied
+  evidence or the correction; a prior worker PASS does not override this check.
 
-Judge answer plus limitations. Claims and source excerpts are context; they do
+Judge answer plus limitations and the task-result appendix. Claims and source excerpts are context; they do
 not excuse an incorrect assembled claim. Do not invent issues to force a FAIL.
+If publication_view is supplied, it is the exact task appendix status view.
+Accepted entries publish their result. Quarantined entries publish status, reason,
+sources and gaps; original task assertions remain archival diagnostic evidence.
+Check quarantine reasons against original records and sources. Reject unjustified
+quarantine, lost required supported facts, hidden conflicts or material gaps, and
+promotion of quarantined claims in the answer. A justified quarantine plus a
+source-supported correction can pass without republishing the original assertion.
 Return direct JSON {"verdict":"PASS|FAIL","issues":["specific unsupported claim or omission"]}.
 PASS has no issues; FAIL has at least one specific issue.
 

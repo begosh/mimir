@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -15,6 +16,7 @@ from backend import BaseSwarmBackend, ClaudeCodeSwarmBackend, SwarmResult
 from gepa_optimizer import CandidateProgram, EvaluationSample, GepaOptimizer
 from jarvis_memory import JarvisMemory
 from task_graph import TaskGraph, TaskNode
+from research_program import prepare_research
 
 
 class ReviewHardeningTests(unittest.IsolatedAsyncioTestCase):
@@ -34,8 +36,24 @@ class ReviewHardeningTests(unittest.IsolatedAsyncioTestCase):
         if phase == "executed":
             state["completed_data"] = {n.id: dict(role=n.role, title=n.title, result="Finding") for n in graph.nodes.values()}
         target = Path(directory) / "state.json"
+        config, _, fingerprint = prepare_research("native", None, None, None, {}, Path(directory))
+        state.update(research_program="native", research_config=config, research_identity=fingerprint)
+        target.with_suffix(".operations.jsonl").write_text(json.dumps({
+            "kind": "budget_started", "time": time.time(), "budget": config["budget"],
+            "publication_reserve": 2}) + "\n", encoding="utf-8")
         mimir._save_state(state, str(target))
         return state, target
+
+    async def test_legacy_budgetless_resume_is_rejected_before_native_setup(self):
+        from mimir_config import ConfigurationRequired
+        with tempfile.TemporaryDirectory() as directory:
+            state, target = self.make_state(directory)
+            state["research_config"]["budget"] = None
+            mimir._save_state(state, str(target))
+            with patch.object(mimir, "create_swarm_backend") as factory, redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(ConfigurationRequired, "Legacy run has no durable budget"):
+                    await mimir.run_mimir(phase="execute", state_file=str(target), progress_format="jsonl")
+            factory.assert_not_called()
 
     async def test_resume_uses_state_settings_without_profile_and_preserves_output(self):
         backend = ClaudeCodeSwarmBackend(claude_path="claude")

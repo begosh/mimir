@@ -1,5 +1,8 @@
 # Mímir worker and host integration research
 
+> Historical development snapshot. Local run/capture artifacts were cleared
+> during workspace cleanup; use current setup docs and tests to reproduce behavior.
+
 Date: 2026-10-22. Scope: replace fragile worker subprocess protocol handling with supported programmatic adapters; determine whether local MCP can replace the skill's shell execution and polling without duplicating the autonomous engine.
 
 This note distinguishes documented capability, inspected release source, local read-only observations, and design decisions. No model inference, login flow, credential inspection, or host configuration changes were performed for this research. Product documentation is current and may change; tagged source and published release metadata qualify the implementation contracts below.

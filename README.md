@@ -27,12 +27,32 @@ Choose the smallest useful workflow:
 
 | Mode | Model calls without retries/pruning | Use |
 | --- | --- | --- |
-| single | One research worker | Focused questions and baseline comparisons |
-| review (default) | Two specialists, a dependent critic, one synthesis | Architecture reviews and consequential proposals |
-| swarm | One bounded planner, up to max-tasks workers, one synthesis | Broader objectives benefiting from custom decomposition |
+| single | One research worker and one admission check | Focused questions and baseline comparisons |
+| review (default) | Two specialists, a dependent critic, admission checks, one synthesis and final check | Architecture reviews and consequential proposals |
+| swarm | One bounded planner, up to max-tasks workers, admission checks, one synthesis and final check | Broader objectives benefiting from custom decomposition |
 
 Task count is independent of concurrency. Default task cap is four; JEV pruning
 is optional and off. There is no executive worker before final synthesis.
+Admission checks may batch up to four ready results. Single publishes its checked
+answer and gaps without synthesis or a duplicate final model call. Review/swarm
+final checks also cover the task-results appendix; corrected summary text cannot
+excuse an unqualified conflicting appendix assertion. These are model checks,
+not independent factual verification.
+Explicit retrieve tasks now trigger an engine reread and frozen exact-span
+handoff before admission. [Capture scope](docs/DYNAMIC_SOURCE_CAPTURE_2026-10-23.md)
+describes domain/workspace limits and the remaining mixed-worker capture gap.
+Bound citations now pass deterministic identity/excerpt checks before model support
+checking. [Qualification](docs/BOUND_SOURCE_SUPPORT_2026-10-23.md) distinguishes
+structural defects, supported locator forms and the remaining semantic gaps.
+Review/swarm final FAIL permits [one targeted assembly correction](docs/ASSEMBLY_REPAIR_2026-10-23.md)
+and recheck under unchanged evidence and limits. Rejected versions remain recorded.
+The [publication view](docs/PUBLICATION_VIEW_2026-10-23.md) can quarantine a disputed
+task with a checked reason while preserving original diagnostic records and gaps.
+Every new run shares a durable budget across planning, workers, checks, retries
+and publication: 64 model-call attempts and 1,800 elapsed seconds by default.
+Review/swarm reserve one synthesis and one final-check call. Resume retains the
+original deadline and consumed attempts; a reported-token threshold can overshoot
+in-flight work. [Budget and recovery details](docs/RUN_BUDGET_2026-10-23.md).
 
 Investigator implementation is a separate choice: `native`, typed DSPy, or
 DSPy RLM with Deno/Pyodide evidence execution and bounded nested RLM calls.
@@ -51,14 +71,8 @@ research paths. Learning candidates require review rather than automatic promoti
 
 [Development notes](docs/DEVELOPMENT_STATUS.md) describe the implementation,
 validation, compatibility changes and open limitations in detail.
-
-The repository also contains [Mycroft](mycroft/README.md), a **very BETA** experiment
-that transfers the research method to native harness subagents and skills without
-a Python orchestrator. It approximates DSPy/RLM/GEPA procedures; it does not execute
-those libraries. An independent Mímir review found admission, publication, recovery
-and isolation gaps. Use it for supervised experiments, with no claim of equivalent
-reliability. Its source, installer and acceptance fixtures are included; generate
-its transfer ZIP locally with `mycroft/Build-Package.ps1`.
+The [improvement backlog](tasks/todo.md) tracks current priorities and acceptance criteria.
+For another computer or coding session, start with the [development handoff](HANDOFF.md).
 
 ## Install and connect
 

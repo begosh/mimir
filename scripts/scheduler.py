@@ -78,8 +78,29 @@ def _restore(graph: Any, backend: Any, blackboard: Any, retained: dict) -> dict:
             if node.id not in completed:
                 continue
             envelope = retained[node.id]
+            if not isinstance(envelope, dict):
+                raise ValueError("Invalid retained result envelope")
             if not node.dependencies.issubset(results):
                 raise ValueError("Retained task has an incomplete dependency.")
+            for packet in envelope.get("frozen_evidence", []):
+                from retrieved_evidence import validate_capture_packet
+                validate_capture_packet(packet)
+            expected_frozen = []
+            for dep in sorted(node.dependencies):
+                for packet in results[dep].get("frozen_evidence", []):
+                    if packet not in expected_frozen:
+                        expected_frozen.append(packet)
+            if node.input_artifacts.get("retrieved_evidence"):
+                expected_frozen.append(node.input_artifacts["retrieved_evidence"])
+            if envelope.get("frozen_evidence", []) != expected_frozen:
+                raise ValueError("Retained frozen evidence lineage changed")
+            if envelope.get("captured_evidence"):
+                from retrieved_evidence import validate_capture_packet
+                validate_capture_packet(envelope["captured_evidence"])
+                if node.input_artifacts.get("retrieved_evidence") != envelope["captured_evidence"]:
+                    raise ValueError("Retained retrieved evidence identity changed")
+            from retrieved_evidence import bind_dependency_evidence
+            bind_dependency_evidence(node, results)
             if (not isinstance(envelope, dict) or not has_worker_result(envelope.get("result"))
                     or not isinstance(envelope.get("raw_response"), str)
                     or hashlib.sha256(envelope["raw_response"].encode("utf-8")).hexdigest() != envelope.get("evidence_hash")
@@ -89,6 +110,10 @@ def _restore(graph: Any, backend: Any, blackboard: Any, retained: dict) -> dict:
                 raise ValueError(f"Retained task '{node.id}' has changed inputs or invalid output identity; replan explicitly.")
             policy = node.input_artifacts.get("result_gate")
             if policy:
+                from source_support import check_bound_citations
+                binding = check_bound_citations(envelope["result"], node.input_artifacts.get("supplied_sources", []))
+                if binding["verdict"] == "FAIL":
+                    raise ValueError("Retained result has invalid bound citation identity: " + "; ".join(binding["issues"]))
                 review = envelope.get("result_check", {})
                 if (review.get("verdict") != "PASS" or review.get("issues") != [] or
                         review.get("policy") != policy or review.get("result_hash") != envelope["result_hash"] or
@@ -137,6 +162,10 @@ async def execute_graph(graph: Any, backend: Any, *, blackboard: Any = None,
     batcher = ResultBatcher(backend, size=min(limit, 4)) if getattr(backend, "batch_result_checks", False) else None
 
     async def run(node: Any, retry_prompt: str | None = None) -> None:
+        from retrieved_evidence import bind_dependency_evidence
+        bind_dependency_evidence(node, results)
+        if on_result_attempt and any(results[d].get("frozen_evidence") for d in node.dependencies):
+            on_result_attempt(node)
         prompt = retry_prompt or node.prompt
         inline = node.input_artifacts.get("supplied_sources")
         if inline:
@@ -186,6 +215,32 @@ async def execute_graph(graph: Any, backend: Any, *, blackboard: Any = None,
         review = None
         if response.rejected_output:
             node.rejected_output = deepcopy(response.rejected_output)
+        if (response.status == "SUCCESS" and
+                node.input_artifacts.get("task_contract", {}).get("operation") == "retrieve"):
+            try:
+                from retrieved_evidence import capture_async, inline_spans
+                previous = node.input_artifacts.get("retrieved_evidence")
+                if previous:
+                    from retrieved_evidence import validate_capture_packet
+                    validate_capture_packet(previous)
+                frozen = previous.get("sources", []) if previous else []
+                data, sources, spans = await capture_async(response.data,
+                    workspace=Path.cwd(), allowed_domains=getattr(backend, "capture_allowed_domains", ()), frozen=frozen)
+                packet = {"sources": sources, "spans": spans}
+                packet["hash"] = _identity(packet)
+                node.input_artifacts["retrieved_evidence"] = packet
+                response.data = data
+                existing = [s for s in node.input_artifacts.get("supplied_sources", [])
+                            if s.get("delivery") != "retrieve_capture"]
+                node.input_artifacts["supplied_sources"] = existing + inline_spans(packet, "retrieve_capture")
+                fingerprint = input_fingerprint(node, results, backend, goal=graph.goal)
+                if on_result_attempt:
+                    on_result_attempt(node)
+            except Exception as exc:
+                node.rejected_output = {"result": deepcopy(response.data), "raw_response": response.raw_response,
+                    "tokens_used": response.tokens_used, "reason": "Engine source capture failed", "capture_error": str(exc)}
+                response.status = "ERROR"
+                response.raw_response = "Engine source capture failed: " + str(exc)
         if response.status == "SUCCESS" and node.max_answer_words is not None:
             import jsonschema
             violation = None
@@ -206,14 +261,19 @@ async def execute_graph(graph: Any, backend: Any, *, blackboard: Any = None,
                 raise ConfigurationRequired("Result-check policy changed; replan explicitly")
             checker_valid = False
             try:
-                if node.input_artifacts["task_contract"]["operation"] == "extract":
+                from post_worker import check_material_records
+                record_check = (check_material_records(response.data)
+                                if node.input_artifacts["task_contract"]["operation"] == "research"
+                                else {"verdict": "REVIEW", "issues": []})
+                if record_check["verdict"] != "FAIL":
+                    from source_support import check_bound_citations
+                    record_check = check_bound_citations(response.data, node.input_artifacts.get("supplied_sources", []))
+                if record_check["verdict"] != "FAIL" and node.input_artifacts["task_contract"]["operation"] == "extract":
                     from extraction_checks import check_extraction
                     record_check = check_extraction(response.data, node.input_artifacts.get("supplied_sources", []))
-                else:
-                    record_check = {"verdict": "REVIEW", "issues": []}
                 check = batcher.check if batcher else lambda n, data, deps: check_task_result(backend, n, data, deps)
                 review = ({"id": "candidate_1", "verdict": "FAIL", "issues": record_check["issues"],
-                           "policy": result_gate_policy(), "check_type": "deterministic_records"}
+                           "policy": result_gate_policy(), "check_type": record_check.get("check_type", "deterministic_records")}
                           if record_check["verdict"] == "FAIL" else await check(node, response.data,
                     {dep: results[dep]["result"] for dep in sorted(node.dependencies)}))
                 review.update(result_hash=_identity(response.data), input_fingerprint=fingerprint)
@@ -257,9 +317,13 @@ async def execute_graph(graph: Any, backend: Any, *, blackboard: Any = None,
                 if on_result_attempt:
                     on_result_attempt(node)
                 if proposal["action"] == "REPHRASE":
-                    from atomic_worker import atomic_prompt
                     assignment = {**node.input_artifacts["task_contract"], "objective": proposal["objective"]}
-                    next_prompt = atomic_prompt(assignment, original_request=graph.goal) + "\nORIGINAL ACCEPTANCE CONTRACT (unchanged):\n" + json.dumps(
+                    if node.input_artifacts.get("worker_wrapper") == "atomic_v1":
+                        from atomic_worker import atomic_prompt
+                        next_prompt = atomic_prompt(assignment, original_request=graph.goal)
+                    else:
+                        next_prompt = node.prompt + "\nTARGETED REPAIR (original assignment unchanged):\n" + proposal["objective"]
+                    next_prompt += "\nORIGINAL ACCEPTANCE CONTRACT (unchanged):\n" + json.dumps(
                         node.input_artifacts["task_contract"], ensure_ascii=False)
                     return await run(node, next_prompt)
                 response.raw_response += "; " + proposal["action"] + ": " + proposal["reason"]
@@ -271,6 +335,17 @@ async def execute_graph(graph: Any, backend: Any, *, blackboard: Any = None,
                         "duration": response.duration_seconds, "tokens_used": response.tokens_used}
             if response.trace_path:
                 envelope["research_trace"] = response.trace_path
+            if node.input_artifacts.get("retrieved_evidence"):
+                envelope["captured_evidence"] = deepcopy(node.input_artifacts["retrieved_evidence"])
+            frozen = []
+            for dep in sorted(node.dependencies):
+                for packet in results[dep].get("frozen_evidence", []):
+                    if packet not in frozen:
+                        frozen.append(deepcopy(packet))
+            if envelope.get("captured_evidence"):
+                frozen.append(deepcopy(envelope["captured_evidence"]))
+            if frozen:
+                envelope["frozen_evidence"] = frozen
             if review:
                 envelope["result_check"] = review
                 envelope["result_check_hash"] = _identity(review)

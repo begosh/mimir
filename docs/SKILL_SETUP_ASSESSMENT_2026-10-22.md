@@ -1,5 +1,8 @@
 # Mímir skill and operating setup assessment — 2026-10-22
 
+> Historical development snapshot. Local run/capture artifacts were cleared
+> during workspace cleanup; use current setup docs and tests to reproduce behavior.
+
 Mímir has a useful shared execution core and is fit for supervised, bounded research and architecture reviews. The present setup is not demonstrably optimal. The next work should repair operating/recovery defects, simplify the default workflow and establish evidence-quality evaluations before expanding orchestration.
 
 This note reconciles the actual Mímir review with independent host checks. No implementation or saved provider configuration was changed. Review artifacts were created; the engine automatically appended a candidate takeaway to the repository LEARNINGS.md. That automatic append is itself a finding for read-only operation.
@@ -33,9 +36,9 @@ The executive worker alone took 80.259s after the four specialists finished. Thi
 
 Full generated artifacts:
 
-- [Mímir report](../artifacts/2026-10-22-optimal-setup-report.md)
-- [JSON sidecar](../artifacts/2026-10-22-optimal-setup-report.json)
-- [Phase checkpoint](../artifacts/2026-10-22-optimal-setup-state.json)
+- Mímir report (historical local file: `../artifacts/2026-10-22-optimal-setup-report.md`)
+- JSON sidecar (historical local file: `../artifacts/2026-10-22-optimal-setup-report.json`)
+- Phase checkpoint (historical local file: `../artifacts/2026-10-22-optimal-setup-state.json`)
 
 The generated report's statements about no tests/model calls describe individual worker activity, not the hosting assessment. Its cross-harness table reflects the evidence provided before this run. This note adds the successful full native Codex terminal workflow and host reproductions below. The full authenticated three-phase MCP workflow was not established today.
 

@@ -66,14 +66,79 @@ class BudgetTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_reservations_prevent_review_starvation(self):
         native = FakeNative()
-        broker = InvocationBroker(native, budget={"max_attempts": 3})
-        broker.reserve_for_review = 2
+        broker = InvocationBroker(native, budget={"max_attempts": 3}, publication_reserve=2)
         await broker.spawn("investigate")
         with self.assertRaises(BudgetExhausted):
             await broker.spawn("more investigation")
-        await broker.spawn("critic", role="Red-Team-Critic")
-        await broker.spawn("synthesis", role="GEPA-Evolver")
+        with self.assertRaises(BudgetExhausted):
+            await broker.spawn("critic", role="Red-Team-Critic")
+        await broker.spawn("synthesis", role="Mimir-Synthesizer")
+        with self.assertRaises(BudgetExhausted):
+            await broker.spawn("duplicate synthesis", role="Mimir-Synthesizer")
+        await broker.spawn("check", role="Mimir-Final-Checker")
         self.assertEqual(len(native.prompts), 3)
+
+    async def test_reserved_interrupted_call_is_consumed_on_resume(self):
+        class HangingNative(FakeNative):
+            async def spawn(self, **options):
+                raise asyncio.CancelledError
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = Path(tmp) / "operations.jsonl"
+            broker = InvocationBroker(HangingNative(), budget={"max_attempts": 4},
+                                      journal=journal, publication_reserve=2)
+            with self.assertRaises(asyncio.CancelledError):
+                await broker.spawn("assemble", role="Mimir-Synthesizer")
+            restored = InvocationBroker(FakeNative(), budget={"max_attempts": 4},
+                        journal=journal, publication_reserve=2, recover=True)
+            self.assertEqual(restored.budget_status["publication_calls_remaining"], 1)
+            self.assertEqual(restored.attempts, 1)
+            await restored.spawn("worker")
+            await restored.spawn("repair", role="Mimir-Assembly-Repairer")
+            with self.assertRaises(BudgetExhausted):
+                await restored.spawn("retry")
+            await restored.spawn("check", role="Mimir-Final-Checker")
+            self.assertEqual(restored.budget_status["publication_calls_remaining"], 0)
+
+    async def test_journal_prevents_deadline_and_limit_reset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = Path(tmp) / "operations.jsonl"
+            with patch("invocation_broker.time.time", return_value=1000):
+                broker = InvocationBroker(FakeNative(), budget={"max_seconds": 10}, journal=journal)
+            with patch("invocation_broker.time.time", return_value=1011):
+                restored = InvocationBroker(FakeNative(), budget={"max_seconds": 10}, journal=journal, recover=True)
+                with self.assertRaises(BudgetExhausted):
+                    await restored.spawn("late")
+            self.assertEqual(restored.deadline, broker.deadline)
+            with self.assertRaisesRegex(ValueError, "fixed by the journal"):
+                InvocationBroker(FakeNative(), budget={"max_seconds": 11}, journal=journal, recover=True)
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                InvocationBroker(FakeNative(), budget={"max_seconds": 10}, journal=journal)
+            journal.unlink()
+            with self.assertRaisesRegex(ValueError, "missing"):
+                InvocationBroker(FakeNative(), budget={"max_seconds": 10}, journal=journal, recover=True)
+
+    async def test_reported_token_threshold_can_overshoot_but_stops_next_call(self):
+        broker = InvocationBroker(FakeNative(), budget={"max_reported_tokens": 1})
+        await broker.spawn("first turn")
+        self.assertEqual(broker.budget_status["reported_tokens"], 10)
+        with self.assertRaisesRegex(BudgetExhausted, "overshoot"):
+            await broker.spawn("next turn")
+
+    async def test_deadline_cancels_inflight_call_and_journals_the_charge(self):
+        class HangingNative(FakeNative):
+            async def spawn(self, **options):
+                await asyncio.Event().wait()
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = Path(tmp) / "operations.jsonl"
+            broker = InvocationBroker(HangingNative(), budget={"max_seconds": 1}, journal=journal)
+            with self.assertRaises(TimeoutError):
+                await broker.spawn("too slow")
+            restored = InvocationBroker(FakeNative(), budget={"max_seconds": 1}, journal=journal, recover=True)
+            self.assertEqual(restored.attempts, 1)
+            self.assertEqual(restored.usage_calls[0]["status"], "interrupted")
+            self.assertEqual(restored.budget_status["unknown_usage_calls"], 1)
+            with self.assertRaises(BudgetExhausted):
+                await restored.spawn("repeat")
 
     async def test_depth_and_profile_cannot_escape_budget(self):
         broker = InvocationBroker(FakeNative(), budget={"max_depth": 0})

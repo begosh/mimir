@@ -8,9 +8,39 @@ PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 SOURCE_STATUSES = {"synthetic_fixture", "retrieved", "user_supplied", "unverified"}
 
 
+def material_finding_contract(prompt):
+    """Keep the original assignment as the admission and repair contract."""
+    return {"objective": prompt, "operation": "research", "inputs": ["assigned evidence and direct dependency results"],
+            "expected_output": "Assigned answer with source-linked material claims, qualifications, conflicts and gaps",
+            "acceptance_check": "Address the original assignment; no unsupported factual additions or omitted material requirements. "
+                                "Preserve source qualifications, conflicts and gaps; model agreement is not independent verification."}
+
+
+def check_material_records(result):
+    """Validate the shared record structure and links, never source entailment."""
+    from jsonschema import validate, ValidationError
+    from research_contract import worker_result_schema
+    try:
+        validate(result, worker_result_schema())
+    except ValidationError:
+        return {"verdict": "FAIL", "issues": ["Malformed material-finding records"], "check_type": "structural_provenance"}
+    issues = []
+    ids = [s["id"] for s in result["sources"]]
+    if any(not sid.strip() for sid in ids) or len(ids) != len(set(ids)):
+        issues.append("Source identities must be nonempty and unique")
+    for claim in result["claims"]:
+        if not claim["text"].strip() or not claim["rationale"].strip():
+            issues.append("Material claims require text and a support rationale")
+        if any(sid not in ids for sid in claim["source_ids"]):
+            issues.append("Material claim references an unknown source")
+        if claim["support_status"] != "unsupported" and not claim["source_ids"]:
+            issues.append("Reported source support requires source links")
+    return {"verdict": "FAIL" if issues else "REVIEW", "issues": issues, "check_type": "structural_provenance"}
+
+
 def result_gate_policy():
     import hashlib
-    return {"version": "answer_and_gaps_v1", "prompt_hash": hashlib.sha256(
+    return {"version": "bound_material_findings_v3", "prompt_hash": hashlib.sha256(
         (PROMPTS / "RESULT_CHECKER.txt").read_bytes()).hexdigest()}
 
 
@@ -108,6 +138,11 @@ def synthesis_context(state):
                  for s in config.get("sources", [])]
     for node in nodes.values():
         supplied += node.get("input_artifacts", {}).get("supplied_sources", [])
+    for envelope in completed.values():
+        packet = envelope.get("captured_evidence")
+        if packet:
+            from retrieved_evidence import inline_spans
+            supplied += inline_spans(packet, "frozen_publication_span")
     statuses = {}
     for source in supplied:
         status = source.get("status", "user_supplied")
@@ -131,7 +166,8 @@ def synthesis_context(state):
         if provenance and provenance not in entry["retrieval_records"]:
             entry["retrieval_records"].append(provenance)
         for field, value in (("locators", source.get("locator")),
-                             ("support_excerpts", source.get("support_excerpt"))):
+                             ("support_excerpts", source.get("support_excerpt") or
+                              (source.get("text") if source.get("delivery", "").startswith("frozen_") else None))):
             if value and value not in entry[field]:
                 entry[field].append(value)
         if entry["status"] != status:
@@ -203,9 +239,12 @@ async def synthesize(backend, context, *, model=None, max_answer_words=None):
     return response.data, context
 
 
-async def check_final_answer(backend, context, assembled, *, model=None):
+async def check_final_answer(backend, context, assembled, *, model=None, publication_view=None):
+    payload = {"task_context": context, "assembled": assembled}
+    if publication_view is not None:
+        payload["publication_view"] = publication_view
     prompt = (PROMPTS / "FINAL_ANSWER_CHECK.txt").read_text(encoding="utf-8").replace(
-        "{{context}}", json.dumps({"task_context": context, "assembled": assembled}, ensure_ascii=False))
+        "{{context}}", json.dumps(payload, ensure_ascii=False))
     schema = {"type": "object", "additionalProperties": False, "required": ["verdict", "issues"],
               "properties": {"verdict": {"type": "string", "enum": ["PASS", "FAIL"]},
                              "issues": {"type": "array", "maxItems": 8,
@@ -224,5 +263,50 @@ async def check_final_answer(backend, context, assembled, *, model=None):
     import hashlib
     return {**verdict, "policy": {"version": "final_answer_v1", "prompt_hash": hashlib.sha256(
         (PROMPTS / "FINAL_ANSWER_CHECK.txt").read_bytes()).hexdigest()},
-        "input_hash": hashlib.sha256(json.dumps({"context": context, "assembled": assembled},
+        "input_hash": hashlib.sha256(json.dumps(payload,
                 ensure_ascii=False, sort_keys=True).encode()).hexdigest()}
+
+
+def assembly_repair_policy():
+    import hashlib
+    return {"version": "publication_assembly_v2", "max_corrections": 1,
+            "repair_prompt_hash": hashlib.sha256((PROMPTS / "ASSEMBLY_REPAIR.txt").read_bytes()).hexdigest(),
+            "checker_prompt_hash": hashlib.sha256((PROMPTS / "FINAL_ANSWER_CHECK.txt").read_bytes()).hexdigest()}
+
+
+async def repair_assembled_answer(backend, context, assembled, feedback, *, model=None, max_answer_words=None, publication=False):
+    payload = {"task_context": context, "rejected_answer": assembled, "feedback": feedback,
+               "max_answer_words": max_answer_words}
+    prompt = (PROMPTS / "ASSEMBLY_REPAIR.txt").read_text(encoding="utf-8").replace(
+        "{{context}}", json.dumps(payload, ensure_ascii=False))
+    schema = {"type": "object", "additionalProperties": False, "required": ["answer", "limitations"],
+              "properties": {"answer": {"type": "string", "minLength": 1},
+                             "limitations": {"type": "array", "maxItems": 8,
+                                             "items": {"type": "string", "maxLength": 600}}}}
+    if publication:
+        schema["required"].append("quarantined_tasks")
+        schema["properties"]["quarantined_tasks"] = {"type": "array", "maxItems": 16, "items": {
+            "type": "object", "additionalProperties": False, "required": ["task_id", "reason"],
+            "properties": {"task_id": {"type": "string"}, "reason": {"type": "string", "minLength": 1, "maxLength": 600}}}}
+    response = await backend.spawn_restricted(prompt=prompt, role="Mimir-Assembly-Repairer",
+        model=model or backend.default_model, effort=backend.default_effort, json_schema=schema)
+    if response.status != "SUCCESS":
+        raise WorkerFailure("Assembly correction", response.raw_response)
+    from jsonschema import validate
+    try:
+        validate(response.data, schema)
+        if publication:
+            from publication_view import build_publication_view
+            build_publication_view(context, response.data["quarantined_tasks"])
+        if not response.data["answer"].strip() or (max_answer_words and len(response.data["answer"].split()) > max_answer_words):
+            raise ValueError("Assembly correction exceeds answer limits or is empty")
+    except Exception as exc:
+        response.rejected_output = {"result": response.data, "raw_response": response.raw_response,
+                                    "reason": "Invalid assembly correction"}
+        for call in getattr(backend, "usage_calls", []):
+            if call.get("operation_id") == response.operation_id:
+                call.update(status="ERROR", rejected_output=response.rejected_output)
+                backend.event(dict(call))
+        exc.rejected_output = response.rejected_output
+        raise
+    return response.data

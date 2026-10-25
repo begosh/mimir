@@ -1,5 +1,8 @@
 # DSPy and RLM implementation design
 
+> Historical development snapshot. Local run/capture artifacts were cleared
+> during workspace cleanup; use current setup docs and tests to reproduce behavior.
+
 Date: 2026-10-22. Status: design proposal; no runtime implementation or installation.
 
 Implement the original ambition as a real DSPy research program with RLM evidence exploration and separately evaluated GEPA instruction optimization. Keep Mimir's existing native worker lifecycle, dependency-ready scheduler, evidence records and durable run manager.
@@ -8,9 +11,9 @@ The recommended upstream foundation is **DSPy 3.4.1**, which already provides `d
 
 ## Evidence and what remains unproved
 
-The Mimir review used two specialists, a dependent critic and synthesis, using native Codex `gpt-6.1-sol`, low effort. [Report](../.mimir/runs/51217d95cf65437595c40f1719a8dcc2/report.md) and [sidecar](../.mimir/runs/51217d95cf65437595c40f1719a8dcc2/report.json) preserve worker findings and retrieval gaps. Worker HTTPS attempts failed; workers examined source snapshots retrieved by the host during this design session. Their statements about no native calls describe their own investigation, not the hosting review.
+The Mimir review used two specialists, a dependent critic and synthesis, using native Codex `gpt-6.1-sol`, low effort. Report (historical local file: `../.mimir/runs/51217d95cf65437595c40f1719a8dcc2/report.md`) and sidecar (historical local file: `../.mimir/runs/51217d95cf65437595c40f1719a8dcc2/report.json`) preserve worker findings and retrieval gaps. Worker HTTPS attempts failed; workers examined source snapshots retrieved by the host during this design session. Their statements about no native calls describe their own investigation, not the hosting review.
 
-Host retrieval through GitHub's contents/release APIs and PyPI succeeded without changing TLS verification. Sources, blob identities and UTC retrieval times are retained in `artifacts/dspy-rlm-design-2026-10-22/`. The host additionally retrieved the published wheel into memory, checked its PyPI SHA-256, and compared the five decisive source modules against the release tag after normalizing Windows newlines. All five match. The wheel metadata reports 3.4.1, although the tagged source pyproject retains 3.4.0. This resolves correspondence for the inspected modules; it does not prove all release files or dependencies compatible. See [wheel provenance](../artifacts/dspy-rlm-design-2026-10-22/wheel-provenance.json).
+Host retrieval through GitHub's contents/release APIs and PyPI succeeded without changing TLS verification. Sources, blob identities and UTC retrieval times are retained in `artifacts/dspy-rlm-design-2026-10-22/`. The host additionally retrieved the published wheel into memory, checked its PyPI SHA-256, and compared the five decisive source modules against the release tag after normalizing Windows newlines. All five match. The wheel metadata reports 3.4.1, although the tagged source pyproject retains 3.4.0. This resolves correspondence for the inspected modules; it does not prove all release files or dependencies compatible. See wheel provenance (historical local file: `../artifacts/dspy-rlm-design-2026-10-22/wheel-provenance.json`).
 
 Live native bridge semantics, sandbox enforcement, cancellation, Windows packaging and comparative research quality have not been tested. Current Python is 3.14.2; `deno` was not found on PATH. No package was installed, no provider settings changed, and no research-quality improvement is claimed.
 

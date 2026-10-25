@@ -71,7 +71,7 @@ from planning, nested depth 1, 6 iterations, 8 subcalls per RLM, 4 simultaneous
 interpreters across investigators, and 16000 output characters. `research_budget`
 is a JSON object using `max_attempts`, `max_seconds`, `max_depth`, `max_iters`,
 `max_subcalls`, `max_interpreters`, `max_output_chars`, `max_reported_tokens`.
-Review reserves calls for critique/synthesis; swarm reserves synthesis. Model
+Review/swarm reserve one synthesis and one final-check call. Model
 and effort are fixed. Reported token stopping can overshoot by a native turn;
 token breakdown and billed cost remain unavailable.
 

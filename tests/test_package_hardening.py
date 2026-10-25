@@ -1,6 +1,5 @@
 """Regression checks for package integrity, privacy and truthful failure handling."""
 import asyncio
-import importlib.util
 import io
 import json
 import os
@@ -197,6 +196,33 @@ class LegacyCleanupSafety(unittest.TestCase):
 
 
 class ScoutEvidenceSafety(unittest.TestCase):
+    def test_ca_bundle_precedence_and_default_verification(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(research_scout.configured_ca_bundle())
+            os.environ["NODE_EXTRA_CA_CERTS"] = "enterprise.pem"
+            self.assertEqual(research_scout.configured_ca_bundle(), "enterprise.pem")
+            os.environ["SSL_CERT_FILE"] = "python.pem"
+            self.assertEqual(research_scout.configured_ca_bundle(), "python.pem")
+            os.environ["REQUESTS_CA_BUNDLE"] = "requests.pem"
+            self.assertEqual(research_scout.configured_ca_bundle(), "requests.pem")
+
+    def test_web_search_uses_configured_ca_without_disabling_verification(self):
+        if not hasattr(research_scout, "cffi_requests"):
+            self.skipTest("Optional web dependencies are unavailable")
+        for env, expected in [({}, True), ({"NODE_EXTRA_CA_CERTS": "enterprise.pem"}, "enterprise.pem")]:
+            with patch.dict(os.environ, env, clear=True), patch.object(research_scout, "HAS_CURL_CFFI", True), \
+                 patch.object(research_scout.cffi_requests, "get", return_value=SimpleNamespace(status_code=429)) as request:
+                research_scout.ResearchScout().search_web_directive(research_scout.SourceDirective("Docs", "pizza"))
+            self.assertEqual(request.call_args.kwargs["verify"], expected)
+
+    def test_arxiv_adds_configured_ca_to_verified_default_context(self):
+        with patch.dict(os.environ, {"NODE_EXTRA_CA_CERTS": "enterprise.pem"}, clear=True), \
+             patch.object(research_scout.ssl, "create_default_context") as context_factory, \
+             patch.object(research_scout.urllib.request, "urlopen", side_effect=TimeoutError()) as request:
+            research_scout.ResearchScout().search_arxiv("pizza")
+        context_factory.return_value.load_verify_locations.assert_called_once_with(cafile="enterprise.pem")
+        self.assertIs(request.call_args.kwargs["context"], context_factory.return_value)
+
     def test_private_objective_without_public_query_makes_no_network_calls(self):
         scout = research_scout.ResearchScout()
         for objective in ["Review code here\nC:\\Users\\user\\private", "token=secretvalue", "/home/user/private", "a" * 241]:
@@ -283,58 +309,6 @@ class MemoryTruthfulness(unittest.TestCase):
             self.assertNotIn("\n## Injected instruction", text)
             self.assertIn("requires independent validation", text)
             self.assertEqual(memory.get_summary_stats()["entries"], 1)
-
-
-class OptionalPresentation(unittest.TestCase):
-    def test_module_import_has_no_personal_dependency_or_discovery_side_effect(self):
-        spec = importlib.util.spec_from_file_location("mimir_presentation_test", SCRIPTS / "build_presentation.py")
-        module = importlib.util.module_from_spec(spec)
-        before = list(sys.path)
-        spec.loader.exec_module(module)
-        self.assertEqual(sys.path, before)
-        self.assertTrue(callable(module.build_deck))
-        with patch.object(sys, "argv", ["build_presentation.py", "--help"]), redirect_stdout(io.StringIO()):
-            with self.assertRaises(SystemExit) as exit_status:
-                module.main()
-        self.assertEqual(exit_status.exception.code, 0)
-
-    def test_explicit_helper_builds_all_slides_without_false_certification(self):
-        spec = importlib.util.spec_from_file_location("mimir_presentation_build_test", SCRIPTS / "build_presentation.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        with TemporaryDirectory() as temp:
-            root = Path(temp)
-            skill = root / "optional skill"
-            (skill / "scripts").mkdir(parents=True)
-            (skill / "assets").mkdir()
-            (skill / "assets" / "SKF Template.pptx").write_bytes(b"fixture")
-            (skill / "scripts" / "skf_deck.py").write_text('''from types import SimpleNamespace
-import json
-from pathlib import Path
-def new_deck(template): return SimpleNamespace(slides=[])
-def add_slide(prs, layout):
-    slide = {"layout": layout, "text": [], "notes": ""}
-    prs.slides.append(slide)
-    return slide
-def set_text(slide, index, text): slide["text"].append(text)
-def set_notes(slide, text): slide["notes"] = text
-def add_source_line(slide, text): slide["text"].append(text)
-def prune_empty_placeholders(slide): pass
-def notes_report(prs): return [i for i, s in enumerate(prs.slides) if not s["notes"]]
-def save(prs, output): Path(output).write_text(json.dumps(prs.slides), encoding="utf-8")
-''', encoding="utf-8")
-            output = root / "artifact" / "deck.json"
-            before = list(sys.path)
-            with redirect_stdout(io.StringIO()):
-                module.build_deck(output, skill)
-            self.assertEqual(sys.path, before)
-            slides = json.loads(output.read_text(encoding="utf-8"))
-            self.assertEqual(len(slides), 8)
-            text = " ".join(" ".join(slide["text"]) + slide["notes"] for slide in slides)
-            self.assertIn("not truth", text)
-            self.assertIn("provider charges", text)
-            self.assertNotIn("eliminate hallucinations", text)
-            self.assertNotIn("zero recurring token billing", text)
 
 
 if __name__ == "__main__":

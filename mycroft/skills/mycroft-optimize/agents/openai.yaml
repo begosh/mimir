@@ -1,4 +1,0 @@
-interface:
-  display_name: "Mycroft Optimize"
-  short_description: "Evaluate and evolve instructions through native agents"
-  default_prompt: "Use $mycroft-optimize to evaluate investigator instruction candidates on my source-grouped dataset."

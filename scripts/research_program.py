@@ -104,6 +104,8 @@ def prepare_research(program, budget, source_manifest, instruction_manifest, sta
         raise ConfigurationRequired("Research program must be native, dspy or rlm")
     previous = state.get("research_config")
     if previous:
+        if previous.get("budget") is None:
+            raise ConfigurationRequired("Legacy run has no durable budget; start a new run")
         if program != previous["program"] or (budget is not None and validate_budget(budget) != previous["budget"]):
             raise ConfigurationRequired("Research program and budget are fixed by the plan")
         config = previous
@@ -114,6 +116,8 @@ def prepare_research(program, budget, source_manifest, instruction_manifest, sta
             supplied_manifest = json.loads(Path(source_manifest).read_text(encoding="utf-8-sig"))
             supplied_statuses = {s["id"]: s.get("status", "user_supplied" if "path" in s else "retrieved")
                                  for s in supplied_manifest["sources"]}
+            if supplied_manifest.get("allowed_domains", []) != config.get("allowed_domains", []):
+                raise ConfigurationRequired("Source capture domain policy changed; start a new run")
             if supplied_statuses != config.get("source_statuses", supplied_statuses):
                 raise ConfigurationRequired("Source status changed; start a new run")
             saved = SourceStore(config["sources"])
@@ -124,12 +128,13 @@ def prepare_research(program, budget, source_manifest, instruction_manifest, sta
         if program != "native" and not sources.records:
             raise ConfigurationRequired("DSPy/RLM requires an explicit captured source manifest")
         config = {"version": 1, "program": program,
-                  "budget": validate_budget(budget) if program != "native" or budget is not None else None,
+                  "budget": validate_budget(budget),
                   "sources": sources.to_list(),
                   "instructions": load_instruction_manifest(instruction_manifest) if instruction_manifest else None,
                   "interpreter_policy": "deno-no-host-access-v1", "dspy_version": "3.4.1"}
         if source_manifest:
             manifest_data = json.loads(Path(source_manifest).read_text(encoding="utf-8-sig"))
+            config["allowed_domains"] = manifest_data.get("allowed_domains", [])
             config["source_statuses"] = {s["id"]: s.get("status", "user_supplied" if "path" in s else "retrieved")
                                          for s in manifest_data["sources"]}
     if program != "native" and not research_runtime()["ready"]:

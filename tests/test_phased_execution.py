@@ -29,14 +29,20 @@ class PhasedExecutionTests(unittest.IsolatedAsyncioTestCase):
             return graph
 
         async def fake_spawn(prompt, role="Micro-Worker", *args, **kwargs):
+            if role == "Mimir-Result-Checker":
+                context = json.loads(prompt.split("INPUTS:\n")[1])
+                return SwarmResult(role, "SUCCESS", {"checks": [
+                    {"id": c["id"], "verdict": "PASS", "issues": []} for c in context["candidates"]]}, "raw")
             if role == "Mimir-Final-Checker":
                 return SwarmResult(role, "SUCCESS", {"verdict":"PASS","issues":[]}, "raw")
             if role == "Mimir-Synthesizer":
                 return SwarmResult(role, "SUCCESS", {"answer": "Phased hardened solution", "limitations": []}, "raw")
-            return SwarmResult(role, "SUCCESS", f"Result from {role}", f"Raw from {role}", duration_seconds=0.1)
+            return SwarmResult(role, "SUCCESS", {"answer": f"Result from {role}", "sources": [],
+                "claims": [], "gaps": []}, f"Raw from {role}", duration_seconds=0.1)
 
         backend.check_cli = fake_check
         backend.spawn = fake_spawn
+        backend.spawn_restricted = fake_spawn  # Explicit fixture for a text-only adapter.
 
         with tempfile.TemporaryDirectory() as tmpdir:
             state_file = Path(tmpdir) / "state.json"

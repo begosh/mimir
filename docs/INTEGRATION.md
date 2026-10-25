@@ -282,4 +282,4 @@ Interface regressions include actual MCP stdio initialization/tools/errors,
 real Codex SDK wire serialization against a local protocol simulator, full
 managed three-phase execution, journal crash-tail recovery, cursor continuity,
 repeated cancellation, ownership across managers and actual OS lease release
-after killing its owning process. The final suite count is recorded in tasks/todo.md.
+after killing its owning process. The final suite count is recorded in tasks/history.md.

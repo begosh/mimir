@@ -1,5 +1,12 @@
 # Development update: direct text workers, 2026-10-23
 
+Current increment: [shared material-finding admission](MATERIAL_FINDING_GATE_2026-10-23.md) adds ordinary worker checks, checked single publication and final appendix checking. Older measurements below describe their dated implementations.
+
+[Durable whole-run budgets](RUN_BUDGET_2026-10-23.md) now apply by default to
+ordinary runs as well as DSPy/RLM. Planning, execution and publication share fixed
+attempt limits and an elapsed deadline, with journaled publication reservations
+that survive interruption and resume.
+
 Direct API calls now execute text-only work by default. Native runtimes are lazy
 tool executors. The same six-task fixture used 91.2% fewer reported tokens through
 direct requests. Planning simplification and OpenCode tool readiness remain open.
@@ -133,5 +140,9 @@ Before consequential use, inspect underlying evidence and test the target harnes
 permissions, recovery and representative questions. No general speed, cost or
 quality improvement is claimed.
 
-Machine-local configs, environments and new raw development packets stay local.
-The separate Mycroft/presentation cleanup is excluded from this delivery.
+Machine-local configs and environments stay local. Completed development runs,
+raw source captures, generated archives/decks and test caches were removed during
+workspace cleanup. The Mycroft and presentation experiments were also removed.
+Dated qualification records describe earlier snapshots; their local artifacts
+are no longer retained. The checked-in tests and fixture generators are the
+reproducible starting point.

@@ -42,7 +42,7 @@ def validate_budget(value=None):
 class InvocationBroker(BaseSwarmBackend):
     """Backend-compatible adapter; resource ownership remains with its native adapter."""
     def __init__(self, native, *, max_context_chars=120000, calls=(), budget=None,
-                 journal=None, policy=None, recover=False):
+                 journal=None, policy=None, recover=False, publication_reserve=0):
         self.native = native
         self.default_model = native.default_model
         self.default_effort = native.default_effort
@@ -52,7 +52,13 @@ class InvocationBroker(BaseSwarmBackend):
         self.budget = validate_budget(budget) if budget is not None else None
         self.journal = Path(journal) if journal else None
         self.policy = policy or {}
+        if type(publication_reserve) is not int or publication_reserve not in (0, 2):
+            raise ValueError("Publication reserve must be zero or two calls")
+        self.publication_reserve = publication_reserve
         began = time.time()
+        budget_header = None
+        if recover and self.budget and self.journal and not self.journal.is_file():
+            raise ConfigurationRequired("Budget journal is missing; resume cannot reset the run deadline or attempts")
         if recover and self.journal and self.journal.is_file():
             ledger = {c["operation_id"]: c for c in self.usage_calls}
             lines = self.journal.read_text(encoding="utf-8").splitlines()
@@ -66,6 +72,9 @@ class InvocationBroker(BaseSwarmBackend):
                     self.journal.write_text("\n".join(lines[:index]) + "\n", encoding="utf-8")
                     break
                 if item.get("kind") == "budget_started":
+                    if budget_header is not None and item != budget_header:
+                        raise ConfigurationRequired("Conflicting budget journal headers")
+                    budget_header = item
                     began = item["time"]
                 elif "operation_id" in item:
                     ledger[item["operation_id"]] = item
@@ -74,12 +83,25 @@ class InvocationBroker(BaseSwarmBackend):
                 if entry["status"] == "inflight":
                     entry["status"] = "interrupted"
         elif self.journal and self.journal.exists():
+            if self.budget:
+                raise ConfigurationRequired("Run budget journal already exists; resume the checkpoint or choose a new run path")
             self.journal.rename(self.journal.with_name(self.journal.name + f".{time.time_ns()}.previous"))
+        if recover and self.budget and self.journal and budget_header is None:
+            raise ConfigurationRequired("Budget journal has no original deadline")
+        if budget_header and (budget_header.get("budget") != self.budget
+                or budget_header.get("publication_reserve") != publication_reserve):
+            raise ConfigurationRequired("Budget limits and publication reserve are fixed by the journal")
+        if type(began) not in (int, float) or not math.isfinite(began):
+            raise ConfigurationRequired("Budget journal has an invalid original deadline")
         self.deadline = began + self.budget["max_seconds"] if self.budget else None
-        if self.budget:
-            self.event({"kind": "budget_started", "time": began})
+        if self.budget and budget_header is None:
+            self.event({"kind": "budget_started", "time": began, "budget": self.budget,
+                        "publication_reserve": publication_reserve})
         self.attempts = len(self.usage_calls)
-        self.reserve_for_review = 0
+        self._reserved_roles = ({"Mimir-Synthesizer", "Mimir-Final-Checker"}
+                                if publication_reserve else set())
+        self._reserved_roles.difference_update(c.get("role") for c in self.usage_calls
+                                               if c.get("publication_reserved"))
         self.required_failures = []
         self._semaphore = asyncio.Semaphore(self.max_concurrency)
         self.interpreters = set()
@@ -100,6 +122,14 @@ class InvocationBroker(BaseSwarmBackend):
                 stream.flush()
                 os.fsync(stream.fileno())
 
+    @property
+    def budget_status(self):
+        return {"limits": self.budget, "deadline": self.deadline,
+                "attempts_used": self.attempts,
+                "publication_calls_remaining": len(self._reserved_roles),
+                "reported_tokens": sum(c.get("tokens_used") or 0 for c in self.usage_calls),
+                "unknown_usage_calls": sum(c.get("tokens_used") is None for c in self.usage_calls)}
+
     async def invoke(self, prompt, *, role="Micro-Worker", depth=0, parent=None,
                      restricted=False, **options):
         serialized = json.dumps(options.get("input_data"), ensure_ascii=False) if options.get("input_data") is not None else ""
@@ -110,8 +140,8 @@ class InvocationBroker(BaseSwarmBackend):
             raise ConfigurationRequired("Native model and effort are fixed for this run")
         async with self._semaphore:
             if self.budget:
-                protected = role in {"Red-Team-Critic", "GEPA-Evolver", "Mimir-Synthesizer", "Mimir-Final-Checker"}
-                available = self.budget["max_attempts"] - (0 if protected else self.reserve_for_review)
+                protected = role in self._reserved_roles
+                available = self.budget["max_attempts"] - len(self._reserved_roles) + int(protected)
                 if self.attempts >= available or time.time() >= self.deadline or depth > self.budget["max_depth"]:
                     raise BudgetExhausted("Research budget exhausted; completed evidence retained without successful publication.")
                 limit = self.budget["max_reported_tokens"]
@@ -132,9 +162,13 @@ class InvocationBroker(BaseSwarmBackend):
                          else getattr(self.native, "transport", None)),
                      "worker_timeout_seconds": getattr(self.native, "timeout_seconds", None),
                      "input_hash": identity({"prompt": prompt, "options": options}),
-                     "status": "inflight", "tokens_used": None}
+                     "status": "inflight", "tokens_used": None,
+                     "publication_reserved": bool(self.budget and role in self._reserved_roles)}
             self.usage_calls.append(entry)
             self.event(dict(entry))
+            # Charge before dispatch, including cancellations and provider errors.
+            if entry["publication_reserved"]:
+                self._reserved_roles.remove(role)
             result = None
             try:
                 dispatch = self.native.spawn_restricted if restricted else self.native.spawn
@@ -152,8 +186,6 @@ class InvocationBroker(BaseSwarmBackend):
                 result.operation_id = op
                 if result.status != "SUCCESS":
                     self.required_failures.append(op)
-                if self.budget and protected:
-                    self.reserve_for_review = max(0, self.reserve_for_review - 1)
                 return result
             except BaseException:
                 entry["status"] = "interrupted"
