@@ -24,6 +24,7 @@ class TaskStatus(str, Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
+    BLOCKED = "BLOCKED"
 
 
 class TaskRole(str, Enum):
@@ -84,6 +85,7 @@ class TaskNode:
     max_retries: int = 2
     error_trace: Optional[str] = None
     required_evidence: bool = False
+    needs_tools: bool = True
     json_schema: Optional[Dict[str, Any]] = None
     jev_status: str = "not_evaluated"
     max_answer_words: Optional[int] = None
@@ -185,6 +187,8 @@ class TaskGraph:
             raise ValueError("Invalid task JEV status")
         if not isinstance(node.required_evidence, bool):
             raise ValueError("Task required_evidence must be a boolean")
+        if not isinstance(node.needs_tools, bool):
+            raise ValueError("Task needs_tools must be a boolean")
         for name in ("id", "role", "title", "prompt"):
             value = getattr(node, name)
             if not isinstance(value, str) or not value.strip():
@@ -304,7 +308,7 @@ class TaskGraph:
             for node in self.nodes.values():
                 if node.status in {TaskStatus.PENDING, TaskStatus.READY}:
                     failed_dep = any(
-                        d not in self.nodes or self.nodes[d].status in {TaskStatus.FAILED, TaskStatus.CANCELLED}
+                        d not in self.nodes or self.nodes[d].status in {TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.BLOCKED}
                         for d in node.dependencies
                     )
                     if failed_dep:
@@ -326,6 +330,12 @@ class TaskGraph:
                     for dep in node.dependencies
                 )
                 if all_completed:
+                    contract = node.input_artifacts.get("task_contract") or {}
+                    if contract.get("blocked_by"):
+                        node.status = TaskStatus.BLOCKED
+                        node.error_trace = "Task blocked by unresolved required inputs: " + ", ".join(contract["blocked_by"])
+                        self.cascade_failures()
+                        continue
                     node.status = TaskStatus.READY
                     runnable.append(node)
         return runnable
@@ -411,6 +421,7 @@ class TaskGraph:
                 max_retries=nd.get("max_retries", 2),
                 error_trace=nd.get("error_trace"),
                 required_evidence=nd.get("required_evidence", False),
+                needs_tools=nd.get("needs_tools", True),
                 json_schema=deepcopy(nd.get("json_schema")),
                 jev_status=nd.get("jev_status", "not_evaluated"),
                 max_answer_words=nd.get("max_answer_words"),
@@ -522,6 +533,13 @@ class RecursiveDecomposer:
             decomp_prompt = f"""You are Mímir's task planner. First interpret the requested
 outcome, constraints, components, evidence needs and missing information in a
 compact task_brief. Do not search, retrieve sources or answer the objective here.
+Distinguish genuine required-input blockers from ambiguity or unspecified recommendation
+preferences (such as 'best', 'optimal', or 'recommended') that permit evidence gathering
+and a qualified answer.
+Start with one bounded retrieval/extraction task when sufficient; split only for
+input/output bounds (> 16,000 chars input or > 150 words output) or distinct decisions
+(such as separate formula calculation, comparison, or distinct stages), permitting
+short contiguous procedures.
 Then decompose the objective into
 1 to {self.max_tasks} concrete, non-overlapping tasks. Use fewer when sufficient.
 {prefix}
@@ -572,10 +590,20 @@ one final synthesis after this graph. Respond directly in English with the schem
             compact = (f"\nReturn only your assigned findings, not other roles' reports or final synthesis. "
                        f"Answer at most {word_limit} whitespace-separated words. Keep source excerpts, claims and gaps compact. "
                        "The engine rejects oversized results; preserve material conflicts and missing evidence as gaps.\n") if word_limit else ""
+            if t.get("contract"):
+                from atomic_worker import TEXT_ONLY
+                op = t["contract"].get("operation")
+                needs_tools = (op not in TEXT_ONLY) if op else False
+            elif self.mode == "review":
+                needs_tools = (t["id"] != "critique")
+            else:
+                needs_tools = t.get("needs_tools", t.get("required_evidence", False) and not dependencies)
+
             node = TaskNode(id=t["id"], role=t["role"], title=t["title"],
                             prompt=prefix + f"YOUR TASK ({t['role']}):\n{instruction}\n\n" + BEARINGS_INSTRUCTIONS + compact + EVIDENCE_INSTRUCTIONS,
                             dependencies=set(dependencies), max_depth=self.max_depth,
                             required_evidence=t.get("required_evidence", False),
+                            needs_tools=needs_tools,
                             input_artifacts={"task_contract": t["contract"]} if t.get("contract") else {},
                             depth=t.get("contract", {}).get("depth", 0),
                             json_schema=worker_result_schema(word_limit), max_answer_words=word_limit)

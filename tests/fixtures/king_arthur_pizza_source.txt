@@ -1,0 +1,11 @@
+Source: https://www.kingarthurbaking.com/recipes/neapolitan-style-pizza-crust-recipe
+L01 Name: Neapolitan-Style Pizza Crust
+L02 Declared yield: two 10" to 12" crusts.
+L03 Dough ingredients: 232 g flour (bread flour or Italian-style), 170 g water (lukewarm), 8 g salt, 1 g active dry or instant yeast, 2 g sugar.
+L04 Combine all dough ingredients in a medium bowl and stir until a cohesive, shaggy dough forms.
+L05 Knead the dough by hand for 5 to 7 minutes on a lightly greased work surface until smooth and elastic.
+L06 Transfer the dough to a lightly greased bowl, cover securely, and bulk-ferment for 12 to 24 hours at room temperature or in refrigerator.
+L07 Divide the dough in half (approximately 200 g each portion) and gently shape into balls.
+L08 Cover the dough balls and let rest for 45 minutes to 1 hour before stretching.
+L09 Stretch and pat each ball into a 10" to 12" crust round by hand.
+L10 Note: Baking at 500 F (260 C) on a preheated pizza stone for 8 to 10 minutes and toppings are out-of-scope for dough.

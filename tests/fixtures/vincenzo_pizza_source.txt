@@ -1,0 +1,14 @@
+Source: https://www.vincenzosplate.com/neapolitan-pizza-dough/
+L01 Name: Neapolitan Pizza Dough
+L02 Declared yield: 4-5 dough balls (approx. 250 g each).
+L03 Dough ingredients: 1 kg flour (Tipo 00), 600 ml lukewarm water, 30 g sea salt, 1-2 g fresh yeast.
+L04 Dissolve the sea salt completely into the lukewarm water in a large mixing bowl.
+L05 Add approximately 10% of the flour and mix until dissolved.
+L06 Add the fresh yeast and mix until completely dissolved.
+L07 Gradually incorporate the remaining flour while mixing by hand until the dough comes together.
+L08 Turn the dough onto a wooden work surface and knead vigorously for 15-20 minutes until smooth and elastic.
+L09 Cover the dough with a damp cloth and rest for at least 2 hours at room temperature (approx. 20 C).
+L10 Divide the dough into 4-5 equal portions (approx. 250 g each) and shape into smooth balls.
+L11 Place the dough balls into a proofing box, cover, and ferment for 24 hours at 16-18 C.
+L12 Stretch each dough ball by hand into a 12-inch round, pushing air toward the rim. Do not use a rolling pin.
+L13 Note: Baking in a wood-fired oven at 500 C for 60-90 seconds and toppings are out-of-scope for dough.

@@ -15,6 +15,8 @@ def identity(value):
 
 
 class SourceStore:
+    _RUN_CAPTURES = {}
+
     def __init__(self, records=()):
         self.records = {}
         for record in records:
@@ -35,7 +37,7 @@ class SourceStore:
     def capture_reference(cls, locator, *, workspace, allowed_domains=()):
         """Read a worker-selected reference under engine-owned capture policy."""
         import re
-        locator = re.sub(r":L\d+(?:-L?\d+)?$", "", locator)
+        locator = re.sub(r":L\d+(?:[-–—]L?\d+)?$", "", locator)
         parsed = urllib.parse.urlsplit(locator)
         if parsed.scheme == "https":
             if not isinstance(allowed_domains, (list, tuple)) or any(not isinstance(d, str) or not d for d in allowed_domains):
@@ -66,9 +68,14 @@ class SourceStore:
             text = target.read_text(encoding="utf-8-sig")
             locator, retrieval_type = str(target), "local_file"
         digest = hashlib.sha256(text.encode()).hexdigest()
-        return {"id": "capture_" + identity({"locator": locator, "sha256": digest}),
-                "locator": locator, "retrieved_at": datetime.now(timezone.utc).isoformat(),
-                "retrieval_type": retrieval_type, "text": text, "sha256": digest}
+        key = (locator, digest)
+        if key in cls._RUN_CAPTURES:
+            return dict(cls._RUN_CAPTURES[key])
+        record = {"id": "capture_" + identity({"locator": locator, "sha256": digest}),
+                  "locator": locator, "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                  "retrieval_type": retrieval_type, "text": text, "sha256": digest}
+        cls._RUN_CAPTURES[key] = record
+        return dict(record)
 
     @classmethod
     def capture(cls, manifest):

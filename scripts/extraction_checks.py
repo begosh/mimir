@@ -17,7 +17,7 @@ def check_extraction(result, supplied_sources):
             available[source["id"]] = {**source, "text": source.get("text", "")}
     cited = result.get("sources", [])
     if not supplied_sources or not cited:
-        return {"verdict": "REVIEW", "issues": [], "reason": "No supplied source/citation binding"}
+        return {"verdict": "REVIEW", "issues": [], "check_type": "structural_provenance", "reason": "No supplied source/citation binding"}
     texts = []
     for citation in cited:
         source = available.get(citation.get("id"))
@@ -55,4 +55,5 @@ def check_extraction(result, supplied_sources):
     if any(label not in labels for label in re.findall(r"\bL\d+\b", body)):
         issues.append("Answer or gaps reference a nonexistent source line")
     return {"verdict": "FAIL" if issues else "REVIEW", "issues": issues,
+            "check_type": "structural_provenance",
             "reason": "Record checks only; completeness, associations and meaning still require review"}

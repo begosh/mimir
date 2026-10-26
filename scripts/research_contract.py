@@ -177,10 +177,72 @@ def aggregate_research_results(completed_data: Dict[str, Any]) -> Dict[str, Any]
 
 
 def audit_final_references(answer: str, research: Dict[str, Any]) -> Dict[str, Any]:
-    """Detect omitted reported-support locators; this is not citation entailment."""
+    """Audit final answer citations against bound research sources.
+
+    Accepts exact locators, basenames, documented source IDs, and unscoped IDs without
+    requiring literal full-path string equality. Detects omitted supporting locators and
+    unbound citations in the synthesis text. Separates structural provenance from model
+    support labels.
+    """
+    from pathlib import Path
+    import re
+    sources = research.get("sources", [])
     used = {s for c in research.get("claims", []) if c.get("support_status") == "supported" for s in c.get("source_ids", [])}
-    locators = {s["locator"] for s in research.get("sources", []) if s.get("id") in used and s.get("locator")}
-    missing = sorted(locator for locator in locators if locator not in answer)
-    return {"missing_supporting_locators": missing, "reference_presence_passed": not missing,
-            "independently_verified": False,
-            "scope": "String presence of worker-reported supporting locators; no entailment or completeness check."}
+
+    source_matchers = {}
+    all_known_tokens = set()
+    for s in sources:
+        sid = s.get("id", "")
+        loc = s.get("locator", "")
+        tokens = {sid}
+        if ":" in sid:
+            tokens.add(sid.split(":", 1)[1])
+        if loc:
+            tokens.add(loc)
+            tokens.add(Path(loc).name)
+            if loc.startswith("http"):
+                clean_url = loc.split("?")[0].rstrip("/")
+                tokens.add(clean_url)
+                tokens.add(clean_url.split("/")[-1])
+        source_matchers[sid] = [t for t in tokens if t]
+        all_known_tokens.update(source_matchers[sid])
+
+    missing = []
+    resolved = []
+    for s in sources:
+        sid = s.get("id")
+        if sid in used:
+            tokens = source_matchers.get(sid, [sid])
+            found = False
+            for token in tokens:
+                if token in answer:
+                    found = True
+                    resolved.append({"source_id": sid, "matched_token": token})
+                    break
+            if not found:
+                missing.append(s.get("locator") or sid)
+
+    bracketed = re.findall(r"\[([^\]\n]{2,80})\]", answer)
+    unbound = []
+    ignore_tags = {"note", "tip", "important", "warning", "caution", "x", " "}
+    for ref in bracketed:
+        clean = ref.strip()
+        if clean.lower() in ignore_tags:
+            continue
+        if (clean.startswith("capture_") or clean.startswith("http") or
+            ":" in clean or re.search(r"\.(?:py|txt|md|html|json)", clean) or
+            "source" in clean.lower()):
+            if not any(token in clean or clean in token for token in all_known_tokens):
+                unbound.append(clean)
+
+    missing_sorted = sorted(set(missing))
+    unbound_sorted = sorted(set(unbound))
+    return {
+        "missing_supporting_locators": missing_sorted,
+        "unbound_references": unbound_sorted,
+        "resolved_references": resolved,
+        "reference_presence_passed": not missing_sorted and not unbound_sorted,
+        "independently_verified": False,
+        "check_type": "structural_provenance",
+        "scope": "String presence and resolution of worker-reported supporting locators; no entailment or completeness check."
+    }

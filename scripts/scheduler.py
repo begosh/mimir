@@ -190,19 +190,45 @@ async def execute_graph(graph: Any, backend: Any, *, blackboard: Any = None,
             if research_dispatch is not None:
                 response = await research_dispatch(node, prompt)
             else:
-                dispatch = backend.spawn
-                if node.input_artifacts.get("worker_wrapper") == "atomic_v1":
-                    from atomic_worker import TEXT_ONLY
-                    if node.input_artifacts["task_contract"]["operation"] in TEXT_ONLY:
+                contract = node.input_artifacts.get("task_contract", {})
+                op = contract.get("operation")
+                dep_data = {dep: results[dep]["result"] for dep in sorted(node.dependencies)}
+
+                deterministic_response = None
+                if op == "calculate":
+                    from formula_engine import can_evaluate_deterministically, execute_deterministic_calculation
+                    if can_evaluate_deterministically(node, dep_data):
+                        deterministic_response = execute_deterministic_calculation(node, dep_data)
+
+                if deterministic_response is not None:
+                    response = deterministic_response
+                else:
+                    # Explicit tool need vs direct text-only routing
+                    needs_tools = getattr(node, "needs_tools", None)
+                    if node.input_artifacts.get("worker_wrapper") == "atomic_v1":
+                        from atomic_worker import TEXT_ONLY
+                        needs_tools = (op not in TEXT_ONLY) if op else False
+                    elif node.id == "critique" or "critic" in node.role.lower():
+                        needs_tools = False
+                    elif needs_tools is None:
+                        needs_tools = True
+
+                    if not needs_tools:
                         native = getattr(backend, "native", backend)
-                        if not callable(getattr(native, "spawn_restricted", None)):
-                            raise ConfigurationRequired("Atomic supplied-input workers require a text-only adapter")
-                        dispatch = backend.spawn_restricted
-                response = await dispatch(prompt=prompt, role=node.role,
-                                           model=getattr(node, "model", None) or backend.default_model,
-                                           effort=getattr(node, "effort", None),
-                                           json_schema=getattr(node, "json_schema", None),
-                                           input_data=None)
+                        if callable(getattr(backend, "spawn_restricted", None)):
+                            dispatch = backend.spawn_restricted
+                        elif callable(getattr(native, "spawn_restricted", None)):
+                            dispatch = native.spawn_restricted
+                        else:
+                            dispatch = backend.spawn
+                    else:
+                        dispatch = backend.spawn
+
+                    response = await dispatch(prompt=prompt, role=node.role,
+                                               model=getattr(node, "model", None) or backend.default_model,
+                                               effort=getattr(node, "effort", None),
+                                               json_schema=getattr(node, "json_schema", None),
+                                               input_data=None)
         except ConfigurationRequired:
             # Admission/configuration failures apply to the run, rather than
             # being a recoverable finding from one worker. Join peers then let
@@ -215,17 +241,59 @@ async def execute_graph(graph: Any, backend: Any, *, blackboard: Any = None,
         review = None
         if response.rejected_output:
             node.rejected_output = deepcopy(response.rejected_output)
-        if (response.status == "SUCCESS" and
-                node.input_artifacts.get("task_contract", {}).get("operation") == "retrieve"):
+        should_capture = False
+        ws = Path(getattr(backend, "workspace", Path.cwd())).resolve()
+        if response.status == "SUCCESS" and isinstance(response.data, dict) and bool(response.data.get("sources")):
+            contract = node.input_artifacts.get("task_contract", {})
+            op = contract.get("operation")
+            if op == "retrieve":
+                should_capture = True
+            elif op in ("research", "extract") or node.required_evidence:
+                supplied = node.input_artifacts.get("supplied_sources", [])
+                supplied_locators = {s.get("locator") for s in supplied if s.get("locator")}
+                supplied_ids = {s.get("id") for s in supplied if s.get("id")}
+                allowed = getattr(backend, "capture_allowed_domains", ())
+                for citation in response.data.get("sources", []):
+                    c_loc = citation.get("locator") or ""
+                    c_id = citation.get("id")
+                    if c_loc not in supplied_locators and c_id not in supplied_ids:
+                        if c_loc.startswith("https://"):
+                            domain = c_loc.split("/")[2].split(":")[0]
+                            if domain in allowed:
+                                should_capture = True
+                                break
+                        else:
+                            try:
+                                candidate_path = (ws / c_loc).resolve()
+                                if candidate_path.is_file() and str(candidate_path).startswith(str(ws)):
+                                    should_capture = True
+                                    break
+                            except Exception:
+                                pass
+
+        if should_capture:
             try:
                 from retrieved_evidence import capture_async, inline_spans
                 previous = node.input_artifacts.get("retrieved_evidence")
                 if previous:
                     from retrieved_evidence import validate_capture_packet
                     validate_capture_packet(previous)
-                frozen = previous.get("sources", []) if previous else []
+                frozen = list(previous.get("sources", [])) if previous else []
+                for env in results.values():
+                    if isinstance(env, dict):
+                        for packet in env.get("frozen_evidence", []):
+                            for s in packet.get("sources", []):
+                                if s not in frozen:
+                                    frozen.append(s)
+                        if env.get("captured_evidence"):
+                            for s in env["captured_evidence"].get("sources", []):
+                                if s not in frozen:
+                                    frozen.append(s)
+                for s in node.input_artifacts.get("supplied_sources", []):
+                    if s not in frozen:
+                        frozen.append(s)
                 data, sources, spans = await capture_async(response.data,
-                    workspace=Path.cwd(), allowed_domains=getattr(backend, "capture_allowed_domains", ()), frozen=frozen)
+                    workspace=ws, allowed_domains=getattr(backend, "capture_allowed_domains", ()), frozen=frozen)
                 packet = {"sources": sources, "spans": spans}
                 packet["hash"] = _identity(packet)
                 node.input_artifacts["retrieved_evidence"] = packet
@@ -268,9 +336,20 @@ async def execute_graph(graph: Any, backend: Any, *, blackboard: Any = None,
                 if record_check["verdict"] != "FAIL":
                     from source_support import check_bound_citations
                     record_check = check_bound_citations(response.data, node.input_artifacts.get("supplied_sources", []))
+                if record_check["verdict"] != "FAIL":
+                    op = node.input_artifacts.get("task_contract", {}).get("operation")
+                    if op == "extract" or node.input_artifacts.get("check_associations"):
+                        from source_support import check_association_integrity
+                        assoc_check = check_association_integrity(response.data, node.input_artifacts.get("supplied_sources", []))
+                        if assoc_check["verdict"] == "FAIL":
+                            record_check = assoc_check
                 if record_check["verdict"] != "FAIL" and node.input_artifacts["task_contract"]["operation"] == "extract":
                     from extraction_checks import check_extraction
                     record_check = check_extraction(response.data, node.input_artifacts.get("supplied_sources", []))
+                if record_check["verdict"] != "FAIL" and node.input_artifacts["task_contract"]["operation"] == "calculate":
+                    from formula_engine import check_calculation
+                    dep_results = {dep: results[dep]["result"] for dep in sorted(node.dependencies)}
+                    record_check = check_calculation(response.data, node, dep_results)
                 check = batcher.check if batcher else lambda n, data, deps: check_task_result(backend, n, data, deps)
                 review = ({"id": "candidate_1", "verdict": "FAIL", "issues": record_check["issues"],
                            "policy": result_gate_policy(), "check_type": record_check.get("check_type", "deterministic_records")}
@@ -377,10 +456,17 @@ async def execute_graph(graph: Any, backend: Any, *, blackboard: Any = None,
             for node in graph.nodes.values():
                 if node.status not in (TaskStatus.PENDING, TaskStatus.READY):
                     continue
-                if any(graph.nodes[dep].status in (TaskStatus.FAILED, TaskStatus.CANCELLED) for dep in node.dependencies):
+                if any(graph.nodes[dep].status in (TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.BLOCKED) for dep in node.dependencies):
                     node.status = TaskStatus.CANCELLED
                     continue
                 if not all(graph.nodes[dep].status == TaskStatus.COMPLETED for dep in node.dependencies):
+                    continue
+                contract = node.input_artifacts.get("task_contract") or {}
+                blocked_by = contract.get("blocked_by", [])
+                if blocked_by:
+                    node.status = TaskStatus.BLOCKED
+                    node.error_trace = "Task blocked by unresolved required inputs: " + ", ".join(blocked_by)
+                    graph.cascade_failure(node.id)
                     continue
                 if jev_gate and node.jev_score < 0.25:
                     node.status = TaskStatus.CANCELLED

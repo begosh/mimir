@@ -52,7 +52,7 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_swarm_interprets_before_task_decomposition_with_restricted_planning(self):
         brief = {"outcome": "Recipe", "constraints": [], "components": ["Dough", "Baking"],
-                 "evidence_needs": ["Dough method"], "missing_information": ["Oven temperature"]}
+                 "evidence_needs": ["Dough method"], "missing_information": ["Oven temperature"], "assumptions": []}
         class Planner(Worker):
             async def spawn_restricted(self, **kwargs):
                 self.calls.append(kwargs)

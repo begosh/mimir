@@ -37,6 +37,8 @@ def test_publication_quarantine_requires_final_approval(tmp_path, approved):
         async def spawn(self, prompt, role="Worker", **options):
             if role == "Domain-Analyst":
                 value = {**finding(BAD), "gaps": ["Condition unresolved"]}
+            elif role in ("Code-Architect", "Red-Team-Critic"):
+                value = finding(GOOD)
             elif role == "Mimir-Synthesizer":
                 value = {"answer": GOOD, "limitations": ["Condition unresolved"]}
             elif role == "Mimir-Assembly-Repairer":

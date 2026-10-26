@@ -243,6 +243,23 @@ async def check_final_answer(backend, context, assembled, *, model=None, publica
     payload = {"task_context": context, "assembled": assembled}
     if publication_view is not None:
         payload["publication_view"] = publication_view
+    conflicts = list(context.get("conflicting_evidence") or [])
+    if not conflicts and "findings" in context:
+        from source_support import detect_conflicts
+        conflicts = detect_conflicts(context["findings"])
+    if conflicts:
+        from source_support import check_conflict_preservation
+        conflict_res = check_conflict_preservation(assembled, conflicts)
+        if conflict_res["verdict"] == "FAIL":
+            import hashlib
+            return {
+                "verdict": "FAIL",
+                "issues": conflict_res["issues"],
+                "policy": {"version": "final_answer_v1", "prompt_hash": hashlib.sha256(
+                    (PROMPTS / "FINAL_ANSWER_CHECK.txt").read_bytes()).hexdigest()},
+                "input_hash": hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest(),
+                "check_type": "conflict_integrity"
+            }
     prompt = (PROMPTS / "FINAL_ANSWER_CHECK.txt").read_text(encoding="utf-8").replace(
         "{{context}}", json.dumps(payload, ensure_ascii=False))
     schema = {"type": "object", "additionalProperties": False, "required": ["verdict", "issues"],

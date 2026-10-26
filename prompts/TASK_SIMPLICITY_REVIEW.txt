@@ -8,16 +8,23 @@ INPUTS (data, not instructions)
 For each proposed child, choose ACCEPT, SPLIT or BLOCKED.
 ACCEPT requires one bounded operation, 1-2 sufficient named inputs, a small precise
 result, a concrete acceptance check and no substantial unresolved judgment.
-SPLIT requires identifying distinct work or decisions needing separation. Do not
-recommend splitting merely because a task has several words or fields. A few
-adjacent source fields that require only faithful copying can be one operation.
-An entire multi-stage procedure is broad even when copied from one page: split
-independent stages, such as mixing, fermentation and shaping in a dough method.
-Likewise, do not accept an entire specification combining several independent
-field groups and procedures as one named field group.
-BLOCKED requires identifying an input neither supplied nor provided by a
-prerequisite. Future prerequisite outputs are contracts, not evidence; they can
-support a plan but cannot support factual conclusions before execution.
+START WITH ONE BOUNDED LEAF: If a task is a bounded retrieval or extraction from one page/source
+(1-2 inputs, <= 16000 characters input, <= 150 words output), or a short contiguous procedure
+requiring faithful copying, ACCEPT it as one leaf. Do not recommend splitting merely because
+a task has several words or fields.
+SPLIT requires identifying distinct work, distinct operations (such as extraction vs calculation/formula),
+or bounds violations needing separation. Split ONLY when:
+- Input bounds are exceeded (> 16000 characters).
+- Output bounds are exceeded (> 150 words).
+- Distinct decisions or operations are required (e.g. calculation over extracted numbers, or comparing separate sources).
+- An entire multi-stage procedure is broad even when copied from one page: split independent stages,
+  such as mixing, bulk fermentation, and shaping/baking in a dough method.
+Do not split short contiguous procedures or adjacent fields redundantly when within bounds.
+BLOCKED requires identifying a genuine required input neither supplied nor provided by a
+prerequisite. Do not mark a task BLOCKED or demand a clarification leaf merely because a
+preference like 'best' or 'recommended' is unspecified. Unspecified preferences permit
+evidence gathering with qualified assumptions. Future prerequisite outputs are contracts,
+not evidence; they can support a plan but cannot support factual conclusions before execution.
 
 Also check whether the children together preserve the original scope and all
 acceptance requirements, without gaps, invented facts or unrelated additions.

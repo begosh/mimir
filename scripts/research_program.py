@@ -173,16 +173,25 @@ class ResearchDispatcher:
         self.selected = self.standard if context.config["program"] == "native" else DspyResearchProgram()
 
     async def __call__(self, node, prompt):
-        if node.input_artifacts.get("worker_wrapper") == "atomic_v1" and self.context.config["program"] == "native":
+        needs_tools = getattr(node, "needs_tools", None)
+        if node.input_artifacts.get("worker_wrapper") == "atomic_v1":
             from atomic_worker import TEXT_ONLY
-            if node.input_artifacts["task_contract"]["operation"] in TEXT_ONLY:
-                native = getattr(self.context.broker, "native", self.context.broker)
-                if not callable(getattr(native, "spawn_restricted", None)):
-                    raise ConfigurationRequired("Atomic supplied-input workers require a text-only adapter")
-                return await self.context.broker.spawn_restricted(prompt=prompt, role=node.role,
-                    model=self.context.broker.default_model, effort=self.context.broker.default_effort,
-                    json_schema=node.json_schema)
-        # Critics retain native research/tools; investigators use selected program.
+            op = node.input_artifacts.get("task_contract", {}).get("operation")
+            needs_tools = (op not in TEXT_ONLY) if op else False
+        elif node.id == "critique" or "critic" in node.role.lower():
+            needs_tools = False
+        elif needs_tools is None:
+            needs_tools = True
+
+        if not needs_tools and self.context.config["program"] == "native":
+            native = getattr(self.context.broker, "native", self.context.broker)
+            if not callable(getattr(native, "spawn_restricted", None)):
+                raise ConfigurationRequired("Supplied-input text workers require a text-only adapter")
+            return await self.context.broker.spawn_restricted(prompt=prompt, role=node.role,
+                model=self.context.broker.default_model, effort=self.context.broker.default_effort,
+                json_schema=node.json_schema)
+
+        # Tool-using workers use the selected research program
         program = self.standard if "critic" in node.role.lower() else self.selected
         outcome = await program.run(ResearchRequest(node.id, prompt, node.role,
                                                    getattr(node, "model", None) or self.context.broker.default_model,

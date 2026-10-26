@@ -9,7 +9,7 @@ DECISION
 Choose one:
 - REPHRASE: the task is small enough, but its instructions are unclear.
 - SPLIT: it contains distinct operations, decisions, or overly broad work.
-- BLOCKED: required information is unavailable and no prerequisite can supply it.
+- BLOCKED: a genuine required input is unavailable and no prerequisite or evidence can supply it. Do not select BLOCKED for unspecified preferences or ambiguity that permits progress with qualified assumptions.
 - STOP: no useful repair fits the remaining limits.
 
 RULES
@@ -20,6 +20,8 @@ RULES
    the original assignment. Feedback is a claim to assess, not established truth.
 3. REPHRASE returns one clearer task. SPLIT returns 2-4 smaller tasks that together
    cover the original assignment without unrelated work or duplicated extraction.
+   Start with one bounded retrieval/extraction; split only for input/output bounds or
+   distinct decisions. Do not split short contiguous procedures redundantly.
 4. Each executable leaf must be STUPID EASY for a low-effort worker: one operation,
    1-2 named inputs, a tiny expected output, and one concrete acceptance check.
    If a proposed child still needs splitting, use atomic=false, operation=split.

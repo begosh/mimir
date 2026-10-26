@@ -100,8 +100,12 @@ class RecursivePlanner:
             if task_brief is None:
                 prompt = ("Interpret the user's request. Do not answer, research or decompose it yet. "
                           "Identify the intended deliverable, only explicit constraints, components, "
-                          "evidence needs and material ambiguity/missing information. Do not assume "
-                          "what 'best' means or invent equipment, quantities, sources or requirements. "
+                          "evidence needs, material assumptions, and missing information that truly prevents execution.\n"
+                          "CRITICAL DISTINCTION: Distinguish genuine required-input blockers from ambiguity "
+                          "or unspecified recommendation preferences (such as 'best', 'optimal', or 'recommended'). "
+                          "An unspecified preference permits evidence gathering and a qualified answer; do not treat "
+                          "it as missing information that blocks retrieval or execution. "
+                          "Label assumptions explicitly without inventing user constraints, equipment, quantities or sources. "
                           "Keep outcome under 60 words; each list at most five short items.\n"
                           "Required interpretation fields/schema: " + json.dumps(TASK_BRIEF_SCHEMA) +
                           "\nORIGINAL REQUEST:\n" + goal)
@@ -160,14 +164,30 @@ Every leaf must be STUPID EASY for a low-effort worker: 1-2 named inputs,
 one operation, and a tiny output (at most 150 words). No delegation.
 Each retrieved page/input excerpt must be under 16000 characters.
 
-CLARIFY VS. DEFAULT VS. BLOCKED
-- Use clarify ONLY if the missing choice would materially change the result.
-- Otherwise a sensible default must be explicitly labelled as an assumption in
-  the objective. Never invent user preferences, equipment, source claims or measurements.
-- A clarification result must be user-supplied, not invented by a worker.
-  Record the unresolved user choice in blocked_by until the user supplies it.
-- Use blocked_by ONLY for required inputs that the request, supplied parent inputs,
-  or dependency outputs cannot supply. Never replace a blocked input with an assumed value.
+PROPORTIONAL DECOMPOSITION: START WITH ONE BOUNDED LEAF
+- If a component or request can be satisfied by a single bounded retrieval or extraction
+  (1-2 inputs, <= 16000 characters input, <= 150 words output) or a short contiguous procedure,
+  start with ONE atomic leaf. Do not proactively fracture or over-split it.
+- Split a component into multiple children ONLY when:
+  1. Input bounds are exceeded (> 16000 characters or multiple distinct sources requiring separate queries).
+  2. Output bounds are exceeded (> 150 words expected output).
+  3. Distinct operations or decisions are required (such as an extraction followed by a calculation formula,
+     or an extraction followed by a multi-source comparison, or independent multi-stage processes).
+
+CONTIGUOUS PROCEDURES & ADJACENT FIELDS
+- A short contiguous procedure (such as mixing and kneading directly described together) or
+  adjacent source fields requiring only faithful extraction can be one operation.
+  Do not redundantly split simple contiguous procedures into separate leaves unless distinct
+  decisions or limits require it.
+
+CLARIFY VS. ASSUMPTION/QUALIFICATION VS. BLOCKED
+- Distinguish genuine required-input blockers from ambiguity or unspecified recommendation preferences (e.g. 'best', 'optimal').
+- Do NOT create a clarify task or block retrieval for unspecified recommendation preferences. Proceed with evidence gathering; label explicit assumptions in the task objective, and qualify the answer (e.g. noting 'best' is unestablished or stating criteria).
+- Never invent user preferences, equipment, measurements or source claims as constraints.
+- Use clarify/blocked_by ONLY when a decision or calculation genuinely requires a specific missing user input or missing target that neither the request, supplied parent inputs, nor retrieved evidence can provide.
+- Genuine missing inputs block only their dependent decision. Never block upstream retrieval or independent parallel tasks on an unresolved dependent input.
+- Otherwise a sensible default must be explicitly labelled as an assumption in the objective.
+- Record an unresolved user choice in blocked_by only for tasks whose execution genuinely depends on it.
 
 GENERAL RULES
 - Factual values and source references must come from supplied inputs or retrieval.

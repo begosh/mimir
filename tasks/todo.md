@@ -44,19 +44,26 @@ appendix assertions. Retrieved pages are still not automatically frozen for depe
   Implemented with the existing structured findings schema, identity-bound
   admission, bounded repairs and single answer/gaps publication without duplicate
   synthesis/check calls. See [qualification](../docs/MATERIAL_FINDING_GATE_2026-10-23.md).
-- [ ] **P1.2** Generate source identity and capture metadata in the engine;
+- [x] **P1.2** Generate source identity and capture metadata in the engine;
   freeze retrieve-worker evidence and bind exact needed spans to dependents.
-  Explicit retrieve-task capture implemented: engine reread, generated ID/time,
-  frozen exact excerpts, durable dependent lineage and publication/recovery checks.
-  Ordinary mixed research/tool-output capture and downstream span completeness
-  remain pending. See [scope and verification](../docs/DYNAMIC_SOURCE_CAPTURE_2026-10-23.md).
-- [ ] **P1.3** Validate source/version/span identity deterministically; add narrow
+  Implemented with engine reread across mixed research/tool workers, content SHA256
+  and canonical capture_<sha256> IDs, UTC capture timestamps with SourceStore._RUN_CAPTURES
+  run caching, frozen exact excerpts with line start/end derivations, claim link rebinding
+  with alias tracking, and downstream span completeness gating (validate_downstream_span_completeness)
+  verifying that all dependency claims have active frozen spans and all contract inputs are bound.
+  See [qualification](../docs/DYNAMIC_SOURCE_CAPTURE_2026-10-26.md).
+- [x] **P1.3** Validate source/version/span identity deterministically; add narrow
   semantic checks for associations, omissions and conditions against the source.
   Preserve conflicting assertions rather than resolving them by majority agreement.
-  Bound citation ID/type/time/locator/quote checks now run before semantic admission
-  and during recovery. Real-code blinded checks caught wrong associations, conditions
-  and required omissions. Broader conflict/omission evaluation remains pending.
-  See [qualification](../docs/BOUND_SOURCE_SUPPORT_2026-10-23.md).
+  Bound citation ID/type/time/locator/quote checks run before semantic admission
+  and during recovery. Narrow deterministic association and condition checks
+  (check_association_integrity) detect inverted numbers and unconditional claims.
+  Conflict integrity checks (check_conflict_preservation, detect_conflicts) reject
+  resolving incompatible assertions by majority agreement. Smallest meaningful test
+  verified on real task_graph word-limit spans across single and review modes,
+  blocking dependent release upon corrupted association, enabling release upon checked repair,
+  and preserving truthful appendix status.
+  See [qualification](../docs/SEMANTIC_AND_CONFLICT_INTEGRITY_2026-10-26.md).
 - [x] **P1.4** Publish accepted versions; quarantine rejected assertions or mark
   their correction status explicitly in appendices.
   Publication status view quarantines disputed task assertions with a checked
@@ -67,11 +74,14 @@ appendix assertions. Retrieved pages are still not automatically frozen for depe
   preserving the original objective, sources, checker policy and run limits.
   Implemented with durable reservation/history, unchanged context and checker,
   and fail-closed exhaustion/interruption. See [verification](../docs/ASSEMBLY_REPAIR_2026-10-23.md).
-- [ ] **P1.6** Separate structural provenance defects from model support labels;
+- [x] **P1.6** Separate structural provenance defects from model support labels;
   avoid treating abbreviated-locator string mismatches as citation entailment failures.
-  Bound structural defects have their own check type; exact source-ID abbreviations
-  resolve without literal full-path comparison. Unbound final-reference audit and
-  broader presentation cleanup remain pending.
+  Bound structural defects across citation checking, extraction checking and final reference
+  auditing consistently assign check_type="structural_provenance". Exact source-ID abbreviations,
+  unscoped IDs and locator basenames resolve in audit_final_references without literal full-path
+  comparison. Unbound citations in synthesis text are audited and flagged in unbound_references,
+  cleanly updating coverage to partial and recording explicit issues in Markdown and JSON reports.
+  See [qualification](../docs/PROVENANCE_AND_PRESENTATION_2026-10-26.md).
 
 Acceptance criteria: required rejected findings never release dependents or become
 unqualified published claims. Unknown/changed source versions and unsupported
@@ -95,19 +105,36 @@ exhausted limits. A minimal direct fixture pipeline used 72.5% fewer reported
 tokens than the direct six-task pipeline, with fewer acceptance boundaries.
 The real-repository review routed a supplied-input critic through native tools.
 
-- [ ] **P2.1** Distinguish genuine required-input blockers from ambiguity that
+- [x] **P2.1** Distinguish genuine required-input blockers from ambiguity that
   permits evidence gathering and a qualified answer; retain the original request
   and label assumptions without inventing user constraints.
-- [ ] **P2.2** Start with one bounded retrieval/extraction; split for input/output
+  Implemented with schema assumptions, uncertainty classification, prompt hardening,
+  graph TaskStatus.BLOCKED isolation, and retained upstream evidence.
+  See [qualification](../docs/BLOCKER_QUALIFICATION_2026-10-25.md).
+- [x] **P2.2** Start with one bounded retrieval/extraction; split for input/output
   bounds or distinct decisions, permitting short contiguous procedures.
-- [ ] **P2.3** Use deterministic computation for explicit supported formulas;
+  Implemented with proportional decomposition, bounds triggers, simplicity review
+  acceptance of bounded leaves and contiguous steps, and single-mode auto-routing.
+  See [qualification](../docs/BOUNDED_EXTRACTION_2026-10-25.md).
+- [x] **P2.3** Use deterministic computation for explicit supported formulas;
   route text/tool work using an explicit tool need rather than a broad role name.
+  Implemented with formula_engine (baker's percentage, hydration, scaling, total weight,
+  safe AST evaluation), 0-token deterministic calculation interception, missing operand
+  gap reporting, Result Gate contradiction checking, and explicit tool need routing
+  (needs_tools=False routing to spawn_restricted for review critiques and atomic text tasks).
+  See [qualification](../docs/FORMULA_AND_TOOL_ROUTING_2026-10-25.md).
 - [x] **P2.4** Enforce one persisted attempt/deadline budget across planning,
   execution, checks, repairs and assembly, with reserved publication calls and
   durable attempt journaling for ordinary runs. Count interruptions and retries.
   [Budget/recovery contract and validation](../docs/RUN_BUDGET_2026-10-23.md).
-- [ ] **P2.5** Compare the minimal checked baseline with recursive plans on a
+- [x] **P2.5** Compare the minimal checked baseline with recursive plans on a
   frozen real-source case set; retain failures, omissions and known/unknown usage.
+  Implemented with frozen real sources (Vincenzo's Plate and King Arthur), quantitative
+  comparison (~70% token and call reduction with single worker + check), verification of zero
+  increase in critical omissions, qualification of unspecified 'best' preferences, isolated
+  blocking of missing inputs with retained upstream evidence, contiguous procedure unsplit
+  preservation, and budget reservation/overshoot accounting.
+  See [qualification](../docs/BASELINE_COMPARISON_2026-10-25.md).
 
 Acceptance criteria: unspecified recommendation preferences do not unnecessarily
 block retrieval, while genuine missing inputs block only the dependent decision.
@@ -133,19 +160,59 @@ learning candidates exist, but ordinary failed-run ingestion is missing.
 Recorded GEPA proposals did not yield an accepted changed instruction set.
 Exact-answer and locator-presence metrics do not establish source entailment.
 
-- [ ] **P3.1** Capture and deduplicate failure packets with original intent,
+- [x] **P3.1** Capture and deduplicate failure packets with original intent,
   source snapshots/spans, attempts, feedback and independently adjudicated defects.
-- [ ] **P3.2** Convert confirmed failures into versioned regressions; separate
+  Implemented with failure_store (process-safe .mimir/failure-packets.jsonl),
+  deterministic content-addressable SHA256 deduplication hashing (original intent, task objective,
+  failure kind, defect fingerprint) with occurrence incrementing and history tracking, automated
+  defect taxonomy classification (classify_defect_from_feedback), independent supervisor defect
+  adjudication, and automatic failure ingestion on engine execution halts and synthesis quarantine.
+  See [qualification](../docs/FAILURE_PACKET_INGESTION_2026-10-25.md).
+- [x] **P3.2** Convert confirmed failures into versioned regressions; separate
   train/dev and fresh held-out families by source/topic and failure lineage.
-- [ ] **P3.3** Compare baseline with one manually edited prompt first, fixing
+  Implemented with regression_suite (RegressionCase, RegressionStore),
+  deterministic case IDs, failure-to-regression conversion with lineage preservation,
+  family-disjoint partitioning (partition_splits by topic and source family),
+  strict split isolation validation (validate_split_isolation raising DataLeakageError
+  on source, topic, or lineage leakage), and evaluator benchmark exporting for evaluate.py.
+  See [qualification](../docs/VERSIONED_REGRESSION_SUITE_2026-10-25.md).
+- [x] **P3.3** Compare baseline with one manually edited prompt first, fixing
   model, effort, tools, budgets, checker rules and intent contracts.
-- [ ] **P3.4** Score unsupported material claims, omissions, unnecessary blockers,
+  Implemented with prompt_comparison (PromptCandidate, run_prompt_comparison),
+  locking model (gpt-6.1-sol), effort (low), tools, budgets, and checker immutability.
+  Detects and rejects checker tampering, disk checksum alterations, held-out answer/locator
+  leakage (DataLeakageError), and invented user constraints (REJECTED_INVENTED_CONSTRAINT).
+  Side-by-side evaluation against versioned train and held-out regression splits.
+  See [qualification](../docs/MANUAL_PROMPT_COMPARISON_2026-10-25.md).
+- [x] **P3.4** Score unsupported material claims, omissions, unnecessary blockers,
   conflict retention and usage; predeclare adoption thresholds and independently
   review source support before explicit manifest selection.
-- [ ] **P3.5** Test rejected/unchanged candidates, activation history and rollback;
+  Implemented with candidate_scoring (CandidateScoreVector, IndependentSourceReviewer,
+  AdoptionThresholds, SelectionRecord, evaluate_candidate_adoption).
+  Audits material claims against bound source texts, flags hallucinations and omissions,
+  enforces 100% conflict retention, caps usage inflation at 1.15x, requires >=1 training
+  defect repair, and generates cryptographic selection records prior to manifest activation.
+  See [qualification](../docs/MULTI_DIMENSIONAL_SCORING_2026-10-25.md).
+- [x] **P3.5** Test rejected/unchanged candidates, activation history and rollback;
   prevent held-out-answer leakage or promotion of unvalidated notes into guidance.
-- [ ] **P3.6** Use GEPA only after it demonstrates benefit over manual edits;
+  Implemented with manifest_activation (ManifestActivationManager, ActivationRecord,
+  guard_guidance_promotion, check_held_out_leakage).
+  Guarantees rejected/unchanged candidates leave runtime prompts 100% bit-for-bit unchanged,
+  records durable cryptographic lineage (prior_hash parent pointers and snapshots in
+  .mimir/manifest-activations.jsonl), provides atomic verified rollback, halts on held-out
+  answer/locator leakage (DataLeakageError), and strictly guards LEARNINGS.md against
+  unvalidated candidate notes (PromotionGateError).
+  See [qualification](../docs/MANIFEST_ACTIVATION_2026-10-26.md).
+- [x] **P3.6** Use GEPA only after it demonstrates benefit over manual edits;
   keep RLM and JEV optional until their target workloads show a useful gain.
+  Implemented with gepa_evaluation (CandidateProfile, GepaComparisonReport,
+  evaluate_gepa_vs_manual, audit_workload_optionality). Rejects GEPA when no measured
+  benefit over manual edit (gepa_train_fixed <= manual_train_fixed or token bloat > 1.25x),
+  rejects GEPA on any held-out regression or new hallucination/omission, disqualifies
+  candidates on held-out leakage (DISQUALIFIED_DATA_LEAKAGE), and adopts GEPA only
+  upon strictly superior defect reduction without regressions. Audits CLI and research program
+  defaults to guarantee JEV and RLM swarms remain strictly optional and default-disabled.
+  See [qualification](../docs/GEPA_EVALUATION_2026-10-26.md).
 
 Acceptance criteria: candidates cannot consume held-out answers or modify checker
 and intent policy. Activation requires a useful measured benefit with no critical
@@ -169,17 +236,36 @@ governance; a larger representative set is needed before claiming general improv
   every planned task.” Completed graphs still need semantic completeness checks.
 - [x] **E3** Run focused verification: 96 tests and 21 subtests passed. These
   engineering tests do not establish general live-model accuracy.
-- [ ] **E4** Preserve E1 as a regression: the critic softened an overreaching
+- [x] **E4** Preserve E1 as a regression: the critic softened an overreaching
   claim, but final PASS missed evidence excluded from the narrow assignment;
   the original assertion remained in the task-results appendix.
-  Wrong-field association and corrected-summary/stale-appendix regressions now
-  cover release and publication. E1's omitted checkpoint guard still needs its
-  exact durable regression; this item remains open.
-- [ ] **E5** Repeat the real-source evaluation after P1/P2, comparing support,
+  Implemented with 12 isolated unit tests in tests/test_checkpoint_loading_and_e1_regression.py
+  covering all _load_state completeness and integrity guards (missing/partial completed_data,
+  unusable results, uncompleted status, missing identity records, tampered hashes, invalid phase transitions).
+  Engine-level run_mimir(phase="synthesize") fail-closed verification ensures 0 model calls are made
+  on incomplete checkpoints. End-to-end repository review regression verifies overreaching claim softening
+  and publication quarantine. Registered E1 failure packet as versioned regression case reg-v1-7f876b3ae389
+  in .mimir/regressions.jsonl with family-disjoint split isolation.
+  See [qualification](../docs/CHECKPOINT_LOADING_AND_E1_REGRESSION_2026-10-26.md).
+- [x] **E5** Repeat the real-source evaluation after P1/P2, comparing support,
   omissions, clarification, calls and usage against the minimal checked baseline.
-- [ ] **E6** Qualify hybrid interruption/recovery and target tool-runtime readiness
+  Implemented with 7 targeted evaluation tests in tests/test_real_source_post_p1_p2_evaluation.py
+  across Vincenzo's Plate and King Arthur real-source fixtures. Demonstrates 0.0% critical omission rate
+  in the minimal baseline while reducing model calls by 75% and tokens by 72.5% (2 calls / 5,154 tokens
+  vs 8 calls / 18,728 tokens). Validates deterministic association gate (P1.3), non-blocking assumption
+  qualification (P2.1), isolated required-input blockers (P2.1), multi-source conflict preservation (P1.3),
+  abbreviated locator audits (P1.6), and 0-token AST formula computation (P2.3).
+  See [qualification](../docs/REAL_SOURCE_EVALUATION_POST_P1_P2_2026-10-26.md).
+- [x] **E6** Qualify hybrid interruption/recovery and target tool-runtime readiness
   separately before making broader routing/recovery claims.
-
+  Implemented with 8 targeted qualification tests in tests/test_hybrid_interruption_and_tool_runtime_qualification.py.
+  Validates diagnostics decoupling direct text API readiness from deferred tool runtime preflight. Confirms
+  HybridSwarmBackend routes direct text tasks with 0 tool initializations while lazily initializing native tools
+  only on explicit tool-using calls. Rejects model drift fail-closed (ConfigurationRequired) and ensures missing
+  credentials do not silently fall back to native tools. Qualifies interruption recovery: in-flight tasks reset to PENDING
+  while retaining verified completed findings; partial outputs never admit; budget journals (.operations.jsonl) prevent
+  deadline/attempt resets; and idempotent publication recovery verifies hashes and skips re-inference.
+  See [qualification](../docs/HYBRID_RECOVERY_AND_TOOL_READINESS_2026-10-26.md).
 Historical measurements are documentary evidence; some raw packets were removed.
 The full assessment records limitations. Local original artifacts:
 [report](../.mimir/runs/7eacc84b92a44c51b92bffa8a4e71cdd/report.md) and

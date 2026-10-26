@@ -120,6 +120,8 @@ def test_corrected_summary_cannot_publish_a_stale_appendix_assertion(tmp_path):
         async def spawn(self, prompt, role="Worker", **options):
             if role == "Domain-Analyst":
                 value = finding(BAD)  # Admission checker misses the semantic defect.
+            elif role in ("Code-Architect", "Red-Team-Critic"):
+                value = finding(GOOD)
             elif role == "Mimir-Synthesizer":
                 value = {"answer": GOOD, "limitations": []}
             elif role == "Mimir-Final-Checker":
