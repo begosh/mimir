@@ -1246,7 +1246,7 @@ async def _run_synthesize_stage(state: Dict[str, Any], state_file: Optional[str]
 
             f"{json_saved} [cyan]{json_path.resolve()}[/cyan]\n"
 
-            f"{'Learning candidate saved:' if memory_saved and mode == 'write' else 'Learning write failed:' if mode == 'write' else 'Learning writes disabled:'} [cyan]{getattr(memory, 'candidate_path', memory.memory_path).resolve()}[/cyan]\n"
+            f"{'Learning candidate saved:' if memory_saved and getattr(memory, 'mode', None) == 'write' else 'Learning write failed:' if getattr(memory, 'mode', None) == 'write' else 'Learning writes disabled:'} [cyan]{getattr(memory, 'candidate_path', memory.memory_path).resolve()}[/cyan]\n"
 
             f"{tot_time} [bold white]{total_elapsed:.1f}s[/bold white]",
 

@@ -504,6 +504,9 @@ class AgySwarmBackend(BaseSwarmBackend):
         self.session_policy = "disposable home per call (temporary session files removed)"
         self.research_tool_policy = "Configured MCP definitions copied to temporary home; plan mode"
 
+    async def spawn_restricted(self, prompt, *, completion_instructions=None, **options):
+        return await self.spawn(prompt, **options)
+
     async def spawn(
         self,
         prompt: str,
@@ -572,7 +575,7 @@ class AgySwarmBackend(BaseSwarmBackend):
                 wrapper = json.loads(raw_out)
             except ValueError:
                 return SwarmResult(role, "ERROR", None, "AGY returned malformed JSON")
-            if isinstance(wrapper, dict) and (wrapper.get("is_error") or wrapper.get("error") or wrapper.get("status", "success") != "success"):
+            if isinstance(wrapper, dict) and (wrapper.get("is_error") or wrapper.get("error") or str(wrapper.get("status", "success")).lower() != "success"):
                 return SwarmResult(role, "ERROR", None, "AGY reported a worker error")
             parsed_data = self._parse_agy_output(raw_out)
             if not has_worker_result(parsed_data):
