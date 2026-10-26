@@ -19,6 +19,8 @@ candidate. Do not use another candidate's evidence to support its answer.
 When source_registry is supplied, resolve each candidate's source_refs by ref.
 Only those referenced records apply to that candidate. Shared storage does not
 authorize borrowing another candidate's answer, gaps or source records.
+When source_registry is supplied, candidate source records omit redundant
+support_excerpt fields; do not reject candidates for omitting support_excerpt.
 
 Against the bound source text, check the association of each material value with
 its field/entity, plus units, ordering and stated conditions. A number appearing

@@ -174,13 +174,34 @@ def _code_identity(root: Path) -> dict[str, Any]:
             "identity_files": count, "git_revision": revision}
 
 
-def collect_diagnostics(backend: str, model: str | None = None, effort: str | None = None,
+def collect_diagnostics(backend: str | None = None, model: str | None = None, effort: str | None = None,
                         run_root: str | Path | None = None,
                         memory_path: str | Path | None = None, memory_mode: str = "read", *,
                         workspace: str | Path | None = None,
                         worker_transport: str | None = None, check_search: bool = False) -> dict[str, Any]:
     """Collect safe identities and prerequisites without starting any worker."""
     workspace = Path(workspace or Path.cwd()).resolve()
+    from mimir_config import config_path, load_config, resolve_execution
+    local_cfg = workspace / ".mimir" / "config.json"
+    resolved_cfg = local_cfg if local_cfg.exists() else config_path(workspace)
+    saved_config = None
+    if resolved_cfg.exists() and (
+        resolved_cfg == local_cfg or (workspace / ".git").exists() or not str(workspace).startswith(str(Path(os.environ.get("TEMP", "/tmp")).resolve()))
+    ):
+        try:
+            saved_config = load_config(resolved_cfg)
+        except ConfigurationRequired:
+            saved_config = None
+    if backend is None or backend == "auto":
+        try:
+            backend, model, effort = resolve_execution(
+                None, model, effort, resolved_cfg if saved_config else local_cfg
+            )
+        except ConfigurationRequired:
+            backend = "codex"
+    elif saved_config and saved_config.get("backend") == backend:
+        model = model or saved_config.get("model")
+        effort = effort or saved_config.get("effort")
     worker_transport = worker_transport or os.environ.get("MIMIR_WORKER_TRANSPORT") or (
         "hybrid" if backend in {"codex", "agy", "claude", "opencode"} else "native")
     runtime_root = Path(__file__).resolve().parent.parent
@@ -220,7 +241,10 @@ def collect_diagnostics(backend: str, model: str | None = None, effort: str | No
     runtime = _code_identity(runtime_root)
     installed = _code_identity(installed_root) if installed_root and installed_root.is_dir() else None
     from research_program import research_runtime
-    report = {"backend": backend, "model": model, "effort": effort,
+    report = {"backend": backend, "model": model, "effort": effort or ("low" if saved_config else None),
+        "configured": saved_config is not None,
+        "config_file": str(resolved_cfg if saved_config else local_cfg),
+        "project_config": saved_config,
         "worker_transport": worker_transport, "interpreter": sys.executable,
         "python_version": sys.version.split()[0], "workspace": str(workspace),
         "run_root": str(Path(run_root).resolve() if run_root else workspace / ".mimir" / "runs"),

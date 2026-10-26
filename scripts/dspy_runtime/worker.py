@@ -57,7 +57,7 @@ def execute(initial, channel):
     import dspy
     from dspy_runtime.engines import NativeEngine, AsyncNativeEngine
     from dspy_runtime.interpreter import InterpreterFactory
-    from source_store import SourceStore
+    from evidence_provenance import EvidenceProvenance as SourceStore
     if dspy.__version__ != "3.4.1":
         raise RuntimeError("DSPy version must be 3.4.1")
     config = initial["config"]

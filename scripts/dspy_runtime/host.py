@@ -7,10 +7,10 @@ import os
 from pathlib import Path
 
 from backend import SwarmResult
+from evidence_provenance import identity
 from invocation_broker import BudgetExhausted
 from mimir_config import ConfigurationRequired
 from owned_process import ProcessOwner, subprocess_options, terminate_owned
-from source_store import identity
 
 MAX_FRAME = 4_000_000
 
@@ -101,10 +101,14 @@ async def run_program(request, context, *, optimize=None):
                 await send({"id": op, "ok": True, "value": None})
             elif frame["kind"] == "source":
                 payload = frame["payload"]
-                if payload["method"] not in {"list_sources", "read_span", "search_sources"}:
-                    raise ValueError("Source operation is outside the capture allowlist")
-                value = getattr(context.sources, payload["method"])(**payload["args"])
-                trace.append({"kind": "source", **payload, "result_hash": identity(value)})
+                if hasattr(context.sources, "dispatch_query"):
+                    value, result_hash = context.sources.dispatch_query(payload["method"], payload["args"])
+                else:
+                    if payload["method"] not in {"list_sources", "read_span", "search_sources"}:
+                        raise ValueError("Source operation is outside the capture allowlist")
+                    value = getattr(context.sources, payload["method"])(**payload["args"])
+                    result_hash = identity(value)
+                trace.append({"kind": "source", **payload, "result_hash": result_hash})
                 await send({"id": op, "ok": True, "value": value})
             else:
                 raise ValueError("Unsupported DSPy broker operation")

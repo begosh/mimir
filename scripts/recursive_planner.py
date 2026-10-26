@@ -306,9 +306,17 @@ BEFORE REPLYING, VERIFY
                    "available_inputs": self.input_contracts(inherited),
                    "domain_rules": self.domain_rules,
                    "check_coverage": check_coverage}
-        template = (Path(__file__).resolve().parents[1] / "prompts" / "TASK_SIMPLICITY_REVIEW.txt").read_text(encoding="utf-8")
-        review = await self.ask(template.replace("{{review_context_json}}", json.dumps(context, ensure_ascii=False)),
-                                "Mimir-Simplicity-Reviewer", field="review_json", parent=parent)
+        from prompt_governance_gate import PromptGovernanceGate
+
+        prompt = PromptGovernanceGate.default().render_template(
+            "TASK_SIMPLICITY_REVIEW", review_context_json=context
+        )
+        review = await self.ask(
+            prompt,
+            "Mimir-Simplicity-Reviewer",
+            field="review_json",
+            parent=parent,
+        )
         validate_review(review, [task["id"] for task in tasks])
         record = {"parent": parent, "task_ids": [t["id"] for t in tasks],
                   "review": deepcopy(review), "check_coverage": check_coverage}
@@ -346,9 +354,15 @@ BEFORE REPLYING, VERIFY
             context = {"original_request": goal, "interpretation": brief,
                        "tasks": [{k: t[k] for k in ("id", "objective", "expected_output", "acceptance_check", "dependencies", "blocked_by")}
                                  for t in self.leaves], "domain_rules": self.domain_rules}
-            template = (Path(__file__).resolve().parents[1] / "prompts" / "TASK_PLAN_COVERAGE.txt").read_text(encoding="utf-8")
-            review = await self.ask(template.replace("{{coverage_context_json}}", json.dumps(context, ensure_ascii=False)),
-                                    "Mimir-Plan-Coverage-Reviewer", field="coverage_json", parent="root")
+            prompt = PromptGovernanceGate.default().render_template(
+                "TASK_PLAN_COVERAGE", coverage_context_json=context
+            )
+            review = await self.ask(
+                prompt,
+                "Mimir-Plan-Coverage-Reviewer",
+                field="coverage_json",
+                parent="root",
+            )
             if not isinstance(review, dict) or set(review) != {"coverage_preserved", "coverage_gaps"}:
                 raise ValueError("Invalid whole-plan coverage fields")
             validate_review({"tasks": [], **review}, [])
@@ -376,13 +390,19 @@ BEFORE REPLYING, VERIFY
                            "max_depth": self.max_depth, "current_depth": original["depth"],
                            "replacement_leaf_slots": self.max_leaves - len(self.leaves) + len(candidate_leaves),
                            "max_repair_attempts": 3 - attempt}}
-            template = (Path(__file__).resolve().parents[1] / "prompts" / "TASK_REPAIR.txt").read_text(encoding="utf-8")
+            prompt = PromptGovernanceGate.default().render_template(
+                "TASK_REPAIR", repair_context_json=context
+            )
             record = {"task_id": original["id"], "attempt": attempt, "status": "repairing",
                       "original": deepcopy(original), "feedback": deepcopy(feedback)}
             self.state["repairs"].append(record)
             self.checkpoint()
-            repair = await self.ask(template.replace("{{repair_context_json}}", json.dumps(context, ensure_ascii=False)),
-                                    "Mimir-Task-Repairer", field="repair_json", parent=original["id"])
+            repair = await self.ask(
+                prompt,
+                "Mimir-Task-Repairer",
+                field="repair_json",
+                parent=original["id"],
+            )
             record["proposal"] = deepcopy(repair)
             validate_repair(repair)
             action = repair["action"]

@@ -109,6 +109,96 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+
+def handle_status_command(args: list[str]) -> int:
+    import argparse
+    from mimir_config import format_status_view
+    from diagnostics import collect_diagnostics
+
+    parser = argparse.ArgumentParser(prog="mimir status", description="Inspect active Mímir model, credentials, and system readiness")
+    parser.add_argument("--json", action="store_true", help="Output full status as JSON")
+    parser.add_argument("--doctor", "--check-search", action="store_true", help="Probe public search endpoints")
+    parser.add_argument("--backend", "-b", help="Evaluate a specific backend")
+    parser.add_argument("--model", "-m", help="Evaluate a specific model")
+    parser.add_argument("--effort", help="Evaluate a specific effort")
+
+    parsed = parser.parse_args(args)
+    if parsed.json:
+        diag = collect_diagnostics(
+            backend=parsed.backend,
+            model=parsed.model,
+            effort=parsed.effort,
+            check_search=parsed.doctor
+        )
+        print(json.dumps(diag, indent=2))
+    else:
+        print(format_status_view(
+            backend=parsed.backend,
+            model=parsed.model,
+            effort=parsed.effort,
+            check_search=parsed.doctor
+        ))
+    return 0
+
+
+def handle_config_command(args: list[str]) -> int:
+    import argparse
+    from mimir_config import configure, config_status, format_config_view
+
+    parser = argparse.ArgumentParser(prog="mimir config", description="View or modify Mímir project configuration (.mimir/config.json)")
+    parser.add_argument("--backend", "-b", choices=["codex", "agy", "claude", "opencode", "responses", "openai", "anthropic", "ollama"], help="Set project backend")
+    parser.add_argument("--model", "-m", help="Set project worker model")
+    parser.add_argument("--effort", help="Set worker reasoning effort (low, medium, high, max)")
+    parser.add_argument("--json", action="store_true", help="Output configuration as JSON")
+    parser.add_argument("assignments", nargs="*", help="Optional key=value assignments (e.g. model=gpt-6.1-sol backend=codex effort=low)")
+
+    parsed = parser.parse_args(args)
+
+    backend = parsed.backend
+    model = parsed.model
+    effort = parsed.effort
+
+    for item in parsed.assignments:
+        if item.lower() == "set":
+            continue
+        if "=" in item:
+            key, val = item.split("=", 1)
+            key = key.strip().lower()
+            val = val.strip()
+            if key == "backend":
+                backend = val
+            elif key == "model":
+                model = val
+            elif key == "effort":
+                effort = val
+            else:
+                sys.stderr.write(f"Unknown config key: {key}. Supported: backend, model, effort\n")
+                return 1
+        else:
+            sys.stderr.write(f"Unrecognized config argument: {item}. Use --model <name> or model=<name>\n")
+            return 1
+
+    is_mutation = bool(backend or model or effort)
+    if is_mutation:
+        try:
+            saved = configure(backend=backend, model=model, effort=effort)
+            if parsed.json:
+                print(json.dumps(saved, indent=2))
+            else:
+                print(f"[OK] Configuration updated in .mimir/config.json:\n")
+                print(format_config_view())
+            return 0
+        except (ValueError, OSError) as exc:
+            sys.stderr.write(f"Failed to update configuration: {exc}\n")
+            return 1
+    else:
+        if parsed.json:
+            status = config_status()
+            print(json.dumps(status, indent=2))
+        else:
+            print(format_config_view())
+        return 0
+
 def main():
     if sys.platform == "win32":
         try:
@@ -118,6 +208,14 @@ def main():
                 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
+
+    if len(sys.argv) > 1:
+        first = sys.argv[1].lower()
+        if first in ("status", "--status"):
+            return handle_status_command(sys.argv[2:])
+        if first in ("config", "configure") and not sys.argv[1].startswith("--"):
+            return handle_config_command(sys.argv[2:])
+
     parser = build_parser()
     args = parser.parse_args()
 
@@ -125,7 +223,7 @@ def main():
 
         from diagnostics import collect_diagnostics
 
-        print(json.dumps(collect_diagnostics(args.backend or "codex", args.model, args.effort,
+        print(json.dumps(collect_diagnostics(args.backend, args.model, args.effort,
 
                                              memory_path=args.memory_path, memory_mode=args.memory or "read",
 

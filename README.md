@@ -60,6 +60,18 @@ Optional upstream GEPA training produces instruction candidates for explicit
 review and activation. [DSPy/RLM setup and use](docs/DSPY_RLM.md) describes the
 qualified Codex route, source manifests, budgets and current limits.
 
+## Architecture & Deep Modules
+
+Mímir is architected around five canonical **deep modules** providing substantial capability behind compact, high-leverage interfaces:
+
+- **[`EvidenceProvenance`](docs/ARCHITECTURE.md#21-evidence--provenance-evidenceprovenance)**: Content-addressed primary source capture (`capture_<sha256>`), bounded character/line span binding, deterministic citation & numeric verification (`REVIEW` or `FAIL`, never hallucinated `PASS`), and material conflict detection across worker findings.
+- **[`AdmissionAndAssemblyGate`](docs/ARCHITECTURE.md#22-admission--assembly-admissionandassemblygate)**: Coalesced batch acceptance checking (up to 4 candidates), bounded 2-step execution rephrase repair, bounded 1-step final assembly repair, and quarantine filtering for published reports.
+- **[`RunCheckpoint`](docs/ARCHITECTURE.md#23-durable-state--lifecycle-runcheckpoint)**: Cross-platform lease locking with Windows stale-lock overrides, atomic temporary-file writes, execution identity validation, and idempotent report publication.
+- **[`WorkerBroker`](docs/ARCHITECTURE.md#24-worker-dispatch--budgeting-workerbroker)**: Central seam between orchestration and transport adapters (Codex, Claude, AGY, OpenCode), managing task dispatch, deterministic math bypasses, context-size validation, attempt/token budgets, and event journalling.
+- **[`PromptGovernanceGate`](docs/ARCHITECTURE.md#25-prompt-governance--auditing-promptgovernancegate)**: Authoritative template resolution with cryptographic digest tracking, injection-safe task prompt assembly separating system instructions from untrusted sources, and held-out regression auditing.
+
+For complete design details, interface contracts, and Architecture Decision Records, see the [Architecture Reference](docs/ARCHITECTURE.md) and [Domain Glossary](GLOSSARY.md).
+
 ## What has changed
 
 This development update replaces the older CLI-first swarm entrypoint with a

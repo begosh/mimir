@@ -1,9 +1,16 @@
 ---
 name: mimir
-description: Investigate complex questions and review architectures using primary evidence, bounded specialist workers, explicit research gaps and a recoverable Python engine.
+description: Investigate complex questions and review architectures using primary evidence, bounded specialist workers, explicit research gaps and a recoverable Python engine. For '/mimir status' or '/mimir config', run 'mimir status' or 'mimir config [model=...] [backend=...] [effort=...]' in ONE command (or call get_diagnostics({}) once) and never probe directories.
 ---
 
 # Mímir — evidence-led research and review
+
+## Fast-path commands (`/mimir status` and `/mimir config`)
+
+When the user asks for `mimir status`, `/mimir status`, `mimir config`, or `/mimir config`:
+- **Status (`status`)**: Run `mimir status` in one terminal command (or call `get_diagnostics({})` once with empty arguments, which automatically loads `.mimir/config.json`) and present the result immediately.
+- **View/Change Config (`config`)**: Run `mimir config` to view, or `mimir config model=<model>`, `mimir config backend=<backend> model=<model> effort=<effort>` in one terminal command (`mimir` is on `PATH`, backed by `C:\Users\jonas\code\skills.sh\mimir\scripts\mimir.py`).
+- **Strict 1-call rule**: Never list directories, never inspect `.mimir/runs`, never guess `python -m mimir`, and never make multiple tool calls for `status` or `config`.
 
 The host captures the objective and presents findings. The Python engine owns
 planning, dependency-ready scheduling, durable results and final publication.
@@ -93,6 +100,9 @@ JEV pruning is optional and off by default; protected/exempt tasks are not
 comparatively scored. Model scores are heuristics, never calibrated probabilities.
 
 ## Worker choice
+
+Run `mimir status` to inspect the active model, backend, API credentials, and readiness in the current workspace.
+Run `mimir config` to view or update saved project settings (`mimir config --model <model>` or `mimir config model=<model>`).
 
 Reuse the backend/model/effort agreed in this conversation or a saved project
 profile. Otherwise ask once for a supported choice, suggesting the known host

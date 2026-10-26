@@ -481,7 +481,7 @@ class RecursiveDecomposer:
         self.on_planning_checkpoint = on_planning_checkpoint
 
     async def decompose_goal(self, goal: str, intelligence_context: str = "", memory_context: str = "", task_brief=None) -> TaskGraph:
-        from research_contract import EVIDENCE_INSTRUCTIONS, worker_result_schema
+        from evidence_provenance import EVIDENCE_INSTRUCTIONS, worker_result_schema
         from task_brief import BEARINGS_INSTRUCTIONS, TASK_BRIEF_SCHEMA, brief_context, validate_task_brief
         self.task_brief = validate_task_brief(task_brief)
         graph = TaskGraph(goal=goal)
@@ -611,12 +611,8 @@ one final synthesis after this graph. Respond directly in English with the schem
                 from atomic_worker import atomic_prompt
                 node.prompt = atomic_prompt(t["contract"], original_request=goal)
                 node.input_artifacts["worker_wrapper"] = "atomic_v1"
-            else:
-                from post_worker import material_finding_contract
-                node.input_artifacts["task_contract"] = material_finding_contract(node.prompt)
-            from post_worker import result_gate_policy, result_repair_policy
-            node.input_artifacts["result_gate"] = result_gate_policy()
-            node.input_artifacts["result_repair"] = result_repair_policy()
+            from admission_and_assembly_gate import AdmissionAndAssemblyGate
+            AdmissionAndAssemblyGate.bind_node_policies(node, mode=self.mode or "swarm")
             graph.add_node(node)
         graph._require_valid()
         if self.mode == "swarm" and self.task_brief is None:

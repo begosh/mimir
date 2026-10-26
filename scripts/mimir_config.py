@@ -67,12 +67,29 @@ def load_config(path: Optional[Path] = None) -> Optional[dict]:
         raise ConfigurationRequired(f"Cannot read Mimir configuration at {target}; repair it or run setup.") from None
 
 
-def configure(backend: str, model: Optional[str] = None, effort: Optional[str] = None,
+def configure(backend: Optional[str] = None, model: Optional[str] = None, effort: Optional[str] = None,
               path: Optional[Path] = None) -> dict:
-    """Save an explicitly agreed profile atomically. Never discover a backend."""
-    data = validate({"version": 1, "backend": backend,
-                     "model": model or DEFAULT_MODELS.get(backend), "effort": effort or "low"})
+    """Save an explicitly agreed profile atomically. Allows partial updates when a profile exists."""
     target = path or config_path()
+    existing = None
+    if target.exists():
+        try:
+            existing = load_config(target)
+        except ConfigurationRequired:
+            existing = None
+
+    effective_backend = backend or (existing["backend"] if existing else None)
+    if not effective_backend:
+        raise ConfigurationRequired(
+            "Choose an explicit backend (e.g. codex, agy, claude, responses) before saving setup."
+        )
+
+    same_backend = existing and (backend is None or backend == existing["backend"])
+    effective_model = model or (existing["model"] if same_backend else None) or DEFAULT_MODELS.get(effective_backend)
+    effective_effort = effort or (existing["effort"] if same_backend else None) or "low"
+
+    data = validate({"version": 1, "backend": effective_backend,
+                     "model": effective_model, "effort": effective_effort})
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
@@ -86,6 +103,116 @@ def configure(backend: str, model: Optional[str] = None, effort: Optional[str] =
         if temporary and temporary.exists():
             temporary.unlink()
     return data
+
+
+def format_config_view(path: Optional[Path] = None, host: Optional[str] = None,
+                       host_model: Optional[str] = None) -> str:
+    """Return a clean human-readable representation of project configuration."""
+    status = config_status(host=host, path=path, host_model=host_model)
+    target = status["config_path"]
+    configured = status["configured"]
+    settings = status["settings"] or {}
+
+    lines = [
+        "M Í M I R // Project Configuration",
+        "═" * 60,
+        f"Location: {target} (Status: {'Configured' if configured else 'Not Configured'})",
+        "",
+    ]
+    if configured:
+        lines.extend([
+            f"  backend : {settings.get('backend')}",
+            f"  model   : {settings.get('model')}",
+            f"  effort  : {settings.get('effort')}",
+            "",
+            "To modify settings:",
+            "  mimir config --model <model>",
+            "  mimir config --backend <backend> --model <model> --effort <effort>",
+            "  mimir config model=<model>",
+        ])
+    else:
+        lines.extend([
+            "No project configuration saved for this workspace.",
+            f"  Suggested backend : {status.get('suggested_backend') or 'codex'}",
+            f"  Suggested model   : {status.get('suggested_model') or 'gpt-6.1-sol'}",
+            f"  Suggested effort  : {status.get('suggested_effort') or 'low'}",
+            "",
+            "To save configuration:",
+            "  mimir config --backend codex --model gpt-6.1-sol --effort low",
+        ])
+    lines.append("═" * 60)
+    return "\n".join(lines)
+
+
+def format_status_view(backend: Optional[str] = None, model: Optional[str] = None,
+                       effort: Optional[str] = None, path: Optional[Path] = None,
+                       workspace: Optional[Path] = None, check_search: bool = False) -> str:
+    """Return a formatted terminal dashboard of active configuration, environment, and readiness."""
+    from diagnostics import collect_diagnostics
+
+    ws = Path(workspace or Path.cwd()).resolve()
+    target = path or config_path(ws)
+    try:
+        resolved_backend, resolved_model, resolved_effort = resolve_execution(backend, model, effort, target)
+    except ConfigurationRequired:
+        resolved_backend = backend or "codex"
+        resolved_model = model
+        resolved_effort = effort
+
+    diag = collect_diagnostics(
+        backend=resolved_backend,
+        model=resolved_model,
+        effort=resolved_effort,
+        workspace=ws,
+        check_search=check_search
+    )
+
+    ready_str = "YES - Ready for execution" if diag.get("ready") else "NO - Prerequisites missing"
+    native = diag.get("native", {})
+    text_api = diag.get("text_api", {})
+
+    lines = [
+        "M Í M I R // System Status & Configuration",
+        "═" * 64,
+        f"Workspace:       {diag.get('workspace')}",
+        f"Config File:     {target} ({'Saved' if target.exists() else 'Using Environment/Defaults'})",
+        "",
+        "[Active Execution Profile]",
+        f"  Backend:       {diag.get('backend')} ({diag.get('worker_transport')})",
+        f"  Worker Model:  {diag.get('model') or '[None set - will require model]'}",
+        f"  Effort:        {diag.get('effort') or 'low'}",
+        f"  Transport:     {diag.get('worker_transport')} (Direct text API + lazy native tools)",
+        "",
+        "[Environment & Readiness]",
+        f"  Ready:         {ready_str}",
+        f"  API Provider:  {text_api.get('provider') or native.get('provider') or 'native'}",
+    ]
+
+    for env_item in native.get("required_environment", []):
+        env_name = env_item.get("name")
+        source = env_item.get("source") or ("Missing" if not env_item.get("available") else "Available")
+        lines.append(f"  Auth Credential: {env_name} [{source}]")
+
+    lines.extend([
+        "",
+        "[Storage & Memory]",
+        f"  Run Storage:   {diag.get('run_root')}",
+        f"  Curated Bank:  {diag.get('memory', {}).get('guidance_path')} (mode: {diag.get('memory', {}).get('mode')})",
+        "",
+        "[Harness & Installation]",
+        f"  Python:        {diag.get('python_version')} ({diag.get('interpreter')})",
+        f"  Global Skill:  {'Mounted & Verified' if diag.get('installation_matches_runtime') else 'Local/Unlinked'}",
+    ])
+
+    if diag.get("errors"):
+        lines.extend([
+            "",
+            "[Errors / Blockers]",
+            *(f"  ! {err}" for err in diag["errors"])
+        ])
+
+    lines.append("═" * 64)
+    return "\n".join(lines)
 
 
 def config_status(host: Optional[str] = None, path: Optional[Path] = None,

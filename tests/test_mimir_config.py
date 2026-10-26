@@ -124,6 +124,54 @@ class ProjectConfiguration(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["settings"]["model"], "gpt-6.1-sol")
         self.assertFalse((self.root / "LEARNINGS.md").exists())
 
+    def test_mimir_status_and_config_cli_commands(self):
+        command = [sys.executable, "-B", str(Path(mimir.__file__).with_name("mimir.py"))]
+        process_env = {**os.environ, "SYSTEMROOT": os.environ.get("SYSTEMROOT", "C:\\Windows")}
+
+        # 1. mimir status in unconfigured directory
+        result = subprocess.run(command + ["status"],
+                                cwd=self.root, env=process_env, capture_output=True, text=True, encoding="utf-8", timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("M Í M I R // System Status", result.stdout)
+
+        # 2. mimir status --json
+        result = subprocess.run(command + ["status", "--json"],
+                                cwd=self.root, env=process_env, capture_output=True, text=True, encoding="utf-8", timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        diag = json.loads(result.stdout)
+        self.assertIn("backend", diag)
+        self.assertIn("ready", diag)
+
+        # 3. mimir config view (unconfigured)
+        result = subprocess.run(command + ["config"],
+                                cwd=self.root, env=process_env, capture_output=True, text=True, encoding="utf-8", timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Not Configured", result.stdout)
+
+        # 4. mimir config set with arguments
+        result = subprocess.run(command + ["config", "--backend", "codex", "--model", "gpt-6.1-sol", "--effort", "low"],
+                                cwd=self.root, env=process_env, capture_output=True, text=True, encoding="utf-8", timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Configuration updated in .mimir/config.json", result.stdout)
+        self.assertTrue(self.path.exists())
+
+        # 5. mimir config partial update (only model)
+        result = subprocess.run(command + ["config", "model=custom-model"],
+                                cwd=self.root, env=process_env, capture_output=True, text=True, encoding="utf-8", timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        saved = load_config(self.path)
+        self.assertEqual(saved["model"], "custom-model")
+        self.assertEqual(saved["backend"], "codex")
+        self.assertEqual(saved["effort"], "low")
+
+        # 6. mimir config --json view
+        result = subprocess.run(command + ["config", "--json"],
+                                cwd=self.root, env=process_env, capture_output=True, text=True, encoding="utf-8", timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        status_json = json.loads(result.stdout)
+        self.assertTrue(status_json["configured"])
+        self.assertEqual(status_json["settings"]["model"], "custom-model")
+
 
 class ConfigurationBeforeExecution(unittest.IsolatedAsyncioTestCase):
     async def test_unconfigured_run_reports_setup_before_backend_or_memory(self):

@@ -25,12 +25,8 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from prompt_governance_gate import InvariantViolationError
 from regression_suite import DataLeakageError, RegressionCase, RegressionStore, validate_split_isolation
-
-
-class InvariantViolationError(ValueError):
-    """Raised when a candidate prompt modifies checkers, invents constraints, or breaches limits."""
-    pass
 
 
 @dataclass
@@ -80,50 +76,14 @@ def check_invariants(
     expected_checker_hashes: Optional[Dict[str, str]] = None,
     held_out_cases: Optional[List[RegressionCase]] = None,
 ) -> None:
-    """Verify that the candidate adheres to strict control invariants.
+    """Verify that the candidate adheres to strict control invariants."""
+    from prompt_governance_gate import PromptGovernanceGate
 
-    1. Checks cannot be modified (target cannot be RESULT_CHECKER or FINAL_ANSWER_CHECK).
-    2. Checker prompts in prompts/ directory must match frozen checksums.
-    3. Candidate prompt text cannot contain held-out answer markers, locators, or text.
-    """
-    target_norm = candidate.target_prompt_file.replace("\\", "/").lower()
-
-    # Rule 1: A candidate cannot modify checker templates directly to pass
-    if any(k in target_norm for k in ("result_checker", "final_answer_check", "checker")):
-        raise InvariantViolationError(
-            f"Candidate targets checker template '{candidate.target_prompt_file}'. "
-            "Checker rules are immutable; candidates cannot weaken verification."
-        )
-
-    # Rule 2: Verify existing checker files remain unmutated on disk
-    if expected_checker_hashes:
-        for rel_path, expected_hash in expected_checker_hashes.items():
-            p = Path(rel_path)
-            if p.exists():
-                actual_hash = hashlib.sha256(p.read_bytes()).hexdigest()
-                if actual_hash != expected_hash:
-                    raise InvariantViolationError(
-                        f"Checker prompt '{rel_path}' was modified on disk! "
-                        f"Expected {expected_hash}, got {actual_hash}."
-                    )
-
-    # Rule 3: Held-out leakage check in candidate text
-    if held_out_cases:
-        low_text = candidate.candidate_prompt_text.lower()
-        for case in held_out_cases:
-            spec = case.verification_spec or {}
-            # Check answer markers
-            for marker in spec.get("required_answer_markers", []):
-                if len(marker) > 3 and marker.lower() in low_text:
-                    raise DataLeakageError(
-                        f"Candidate prompt leaks held-out answer marker '{marker}' from case {case.case_id}!"
-                    )
-            # Check locators
-            for loc in spec.get("required_locators", []):
-                if loc and Path(loc).name.lower() in low_text:
-                    raise DataLeakageError(
-                        f"Candidate prompt leaks held-out locator '{loc}' from case {case.case_id}!"
-                    )
+    PromptGovernanceGate.default().audit_candidate(
+        candidate,
+        expected_checker_hashes=expected_checker_hashes,
+        held_out_cases=held_out_cases,
+    )
 
 
 def detect_invented_constraints(

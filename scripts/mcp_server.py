@@ -62,9 +62,9 @@ def create_server(root: Path, manager: RunManager | None = None):
                                 planning_budget=planning_budget, max_depth=max_depth)
 
     @server.tool(annotations=public_read)
-    async def get_diagnostics(backend: str = "codex", model: str | None = None,
+    async def get_diagnostics(backend: str | None = None, model: str | None = None,
                               effort: str | None = None, check_search: bool = False) -> dict:
-        """Read setup without inference or secrets. Opt into bounded public search probes with check_search=true; report usability and suggest an MCP if the scout fails."""
+        """Complete one-call Mimir status and configuration check. Omit backend/model/effort to automatically read the workspace's saved .mimir/config.json profile. Returns active backend, model, effort, project_config, credentials, memory paths and readiness in a single call. Do not run extra shell commands after calling this tool. Opt into public search probes with check_search=true."""
         from diagnostics import collect_diagnostics
         return await asyncio.to_thread(collect_diagnostics, backend, model, effort,
                                        run_root=runs.root, check_search=check_search)

@@ -8,8 +8,8 @@ from pathlib import Path
 import sys
 
 from backend import SwarmResult
+from evidence_provenance import EvidenceProvenance, SourceStore, identity
 from mimir_config import ConfigurationRequired
-from source_store import SourceStore, identity
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ class ResearchOutcome:
 @dataclass
 class ResearchContext:
     broker: object
-    sources: SourceStore
+    sources: EvidenceProvenance
     run_directory: Path
     config: dict
 
@@ -64,7 +64,7 @@ def research_python():
 
 
 def research_runtime():
-    """Inspect the selected optional environment without credentials or inference."""
+    """Inspect the optional environment without credentials or inference."""
     import subprocess
     code = "import importlib.metadata as m,json,sys; names=['dspy','gepa','deno']+(['pywin32'] if sys.platform=='win32' else []); print(json.dumps({n:m.version(n) for n in names}))"
     try:
@@ -112,19 +112,16 @@ def prepare_research(program, budget, source_manifest, instruction_manifest, sta
         if instruction_manifest and load_instruction_manifest(instruction_manifest) != config.get("instructions"):
             raise ConfigurationRequired("Instruction manifest changed; start a new run")
         if source_manifest:
-            current = SourceStore.capture(source_manifest)
-            supplied_manifest = json.loads(Path(source_manifest).read_text(encoding="utf-8-sig"))
-            supplied_statuses = {s["id"]: s.get("status", "user_supplied" if "path" in s else "retrieved")
-                                 for s in supplied_manifest["sources"]}
-            if supplied_manifest.get("allowed_domains", []) != config.get("allowed_domains", []):
+            current = EvidenceProvenance.from_manifest(source_manifest)
+            if current.allowed_domains != config.get("allowed_domains", []):
                 raise ConfigurationRequired("Source capture domain policy changed; start a new run")
-            if supplied_statuses != config.get("source_statuses", supplied_statuses):
+            if current.source_statuses != config.get("source_statuses", current.source_statuses):
                 raise ConfigurationRequired("Source status changed; start a new run")
-            saved = SourceStore(config["sources"])
+            saved = EvidenceProvenance(config["sources"])
             if [(r["id"], r["locator"], r["sha256"]) for r in current.to_list()] != [(r["id"], r["locator"], r["sha256"]) for r in saved.to_list()]:
                 raise ConfigurationRequired("Source manifest changed; start a new run")
     else:
-        sources = SourceStore.capture(source_manifest) if source_manifest else SourceStore()
+        sources = EvidenceProvenance.from_manifest(source_manifest) if source_manifest else EvidenceProvenance()
         if program != "native" and not sources.records:
             raise ConfigurationRequired("DSPy/RLM requires an explicit captured source manifest")
         config = {"version": 1, "program": program,
@@ -133,29 +130,21 @@ def prepare_research(program, budget, source_manifest, instruction_manifest, sta
                   "instructions": load_instruction_manifest(instruction_manifest) if instruction_manifest else None,
                   "interpreter_policy": "deno-no-host-access-v1", "dspy_version": "3.4.1"}
         if source_manifest:
-            manifest_data = json.loads(Path(source_manifest).read_text(encoding="utf-8-sig"))
-            config["allowed_domains"] = manifest_data.get("allowed_domains", [])
-            config["source_statuses"] = {s["id"]: s.get("status", "user_supplied" if "path" in s else "retrieved")
-                                         for s in manifest_data["sources"]}
+            config["allowed_domains"] = sources.allowed_domains
+            config["source_statuses"] = sources.source_statuses
     if program != "native" and not research_runtime()["ready"]:
         raise ConfigurationRequired("Research dependencies unavailable or unqualified; install requirements-research.txt in MIMIR_RESEARCH_PYTHON or .venv-research")
-    sources = SourceStore(config["sources"])
+    sources = EvidenceProvenance.from_state(config)
     if config.get("instructions") and config["instructions"]["program"] != program:
         raise ConfigurationRequired("Instruction manifest does not match the research program")
-    # Reuse frozen content but reject changed explicitly supplied local sources.
-    for record in sources.to_list():
-        if record["retrieval_type"] != "local_file":
-            continue  # Remote snapshots are frozen; no invisible refetch on resume.
-        target = Path(record["locator"])
-        if not target.is_file() or identity(target.read_text(encoding="utf-8-sig")) != identity(record["text"]):
-            raise ConfigurationRequired("Captured local source changed or became inaccessible; start a new run")
+    sources.verify_local_sources_unchanged()
     fingerprint = {k: v for k, v in config.items() if k != "sources"}
     fingerprint["source_digest"] = sources.digest
     import hashlib
     digest = hashlib.sha256()
     root = Path(__file__).resolve().parent
-    for target in sorted([root / "research_program.py", root / "invocation_broker.py", root / "source_store.py",
-                          root / "owned_process.py", root / "codex_sdk_backend.py", * (root / "dspy_runtime").glob("*.py")]):
+    for target in sorted([root / "research_program.py", root / "invocation_broker.py", root / "evidence_provenance.py",
+                          root / "owned_process.py", root / "codex_sdk_backend.py", *(root / "dspy_runtime").glob("*.py")]):
         digest.update(target.name.encode())
         digest.update(target.read_bytes())
     fingerprint["runtime_sha256"] = digest.hexdigest()
@@ -191,7 +180,6 @@ class ResearchDispatcher:
                 model=self.context.broker.default_model, effort=self.context.broker.default_effort,
                 json_schema=node.json_schema)
 
-        # Tool-using workers use the selected research program
         program = self.standard if "critic" in node.role.lower() else self.selected
         outcome = await program.run(ResearchRequest(node.id, prompt, node.role,
                                                    getattr(node, "model", None) or self.context.broker.default_model,
