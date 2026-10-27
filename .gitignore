@@ -55,3 +55,7 @@ opencode.jsonc
 .mimir/
 .agents/skills/
 skills-lock.json
+
+# Temporary outputs and scratch
+scratch/
+.mycroft/
